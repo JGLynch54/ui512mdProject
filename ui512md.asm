@@ -22,7 +22,8 @@
 mult_u		PROC			PUBLIC
 			LOCAL			padding1[8]:QWORD
 			LOCAL			product[16]:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
+			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD
+			LOCAL			savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
 			LOCAL			plierWC:WORD, candWC:WORD
 			LOCAL			padding2[8]:QWORD
 			CreateFrame		240h, savedRBP
@@ -94,10 +95,10 @@ multloop:
 			MUL				Q_PTR [R11] + [R8 * 8]
 			ADD				product[R10 * 8], RAX
 			;
-			DEC				R10
+			DEC				R10							; preserves carry flag
 addcarryloop:
 			ADC				product[R10 * 8], RDX
-			MOV				RDX, 0
+			MOV				RDX, 0						; again, preserves carry flag
 			JNC				nextcand
 			DEC				R10
 			JGE				addcarryloop

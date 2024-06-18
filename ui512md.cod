@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/16/24 18:10:57
+Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/18/24 10:10:54
 ui512md.asm						     Page 1 - 1
 
 
@@ -315,7 +315,8 @@ ui512md.asm						     Page 1 - 1
  00000000			mult_u		PROC			PUBLIC
 							LOCAL			padding1[8]:QWORD
 							LOCAL			product[16]:QWORD
-							LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
+							LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD
+							LOCAL			savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
 							LOCAL			plierWC:WORD, candWC:WORD
 							LOCAL			padding2[8]:QWORD
 							CreateFrame		240h, savedRBP
@@ -447,11 +448,11 @@ ui512md.asm						     Page 1 - 1
  0000016C  4A/ 01 84 D5					ADD				product[R10 * 8], RAX
 	   FFFFFF40
 							;
- 00000174  49/ FF CA					DEC				R10
+ 00000174  49/ FF CA					DEC				R10							; preserves carry flag
  00000177			addcarryloop:
  00000177  4A/ 11 94 D5					ADC				product[R10 * 8], RDX
 	   FFFFFF40
- 0000017F  48/ C7 C2					MOV				RDX, 0
+ 0000017F  48/ C7 C2					MOV				RDX, 0						; again, preserves carry flag
 	   00000000
  00000186  73 05					JNC				nextcand
  00000188  49/ FF CA					DEC				R10
@@ -489,7 +490,7 @@ ui512md.asm						     Page 1 - 1
  000001DF			exitmultnocopy:			
  000001DF  4C/ 8B A5					MOV				R12, savedR12
 	   FFFFFF00
- 000001E6  4C/ 8B 9D			MOV				R11, savedR11
+ 000001E6  4C/ 8B 9D					MOV				R11, savedR11
 	   FFFFFF08
  000001ED  4C/ 8B 95					MOV				R10, savedR10
 	   FFFFFF10
@@ -615,6 +616,7 @@ ui512md.asm						     Page 1 - 1
 	   FF
  00000319  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
+
  0000031F  48/ 33 C0					XOR				RAX, RAX
  00000322  48/ 89 45 80					MOV				product [ 8 * 8 ], RAX		; 
 							;
@@ -668,7 +670,7 @@ ui512md.asm						     Page 1 - 1
  000003AD  7D F3					JGE				copyloop
  000003AF  48/ 8B 85					MOV				RAX, product [ 0 ]
 	   FFFFFF40
- 000003B6  48/ 8B 95					MOV				RDX, savedRDX
+ 000003B6  48/ 8B 95			MOV				RDX, savedRDX
 	   FFFFFF30
  000003BD  48/ 89 02					MOV				[RDX], RAX				; callers overflow to zero
 
@@ -1024,7 +1026,7 @@ ui512md.asm						     Page 1 - 1
  000006ED			div_uT64	ENDP
 
 							END
-Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/16/24 18:10:57
+Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/18/24 10:10:54
 ui512md.asm						     Symbols 2 - 1
 
 
