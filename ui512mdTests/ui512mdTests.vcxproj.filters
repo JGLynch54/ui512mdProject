@@ -32,5 +32,14 @@
     <ClInclude Include="CommonTypeDefs.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\ui512bProject\ui512bTests\ui512b.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ui512a.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ReadMe.md" />
   </ItemGroup>
 </Project>

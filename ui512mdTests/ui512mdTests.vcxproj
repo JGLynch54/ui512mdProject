@@ -96,6 +96,7 @@
       <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <UseFullPaths>true</UseFullPaths>
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -166,9 +167,14 @@
     <ClCompile Include="ui512mdTests.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\ui512bProject\ui512bTests\ui512b.h" />
     <ClInclude Include="CommonTypeDefs.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="ui512a.h" />
     <ClInclude Include="ui512md.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="ReadMe.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

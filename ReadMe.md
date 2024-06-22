@@ -1,23 +1,25 @@
 Project Description
 
 	ui512 is a small project to provide basic operations for a variable type of unsigned 512 bit integer.
-	The basic operations in the module ui512a are: zero, copy, compare, add, subtract.
+	The basic operations: zero, copy, compare, add, subtract.
     Other optional modules provide bit ops and multiply / divide.
-	It is written in assembly language, using the MASM (ml64) assembler provided as an option within 
-    Visual Studio (currently using VS Community 2022 17.9.6).
-	It provides external signatures that allow linkage to C and C++ programs, where a shell/wrapper
-    could encapsulate the methods as part of an object.
-	It has assembly time options directing the use of Intel processor extensions:
-    AVX4, AVX2, SIMD, or none: (Z (512), Y (256), or X (128) registers, or regular Q (64bit))
-	If processor extensions are used, the caller must align the variables declared and passed on the 
-    appropriate byte boundary (e.g. alignas 64 for 512)
-	This module is very light-weight (less than 1K bytes) and relatively fast, but is not intended
-    for all processor types or all environments. 
-	Use for private (hobbyist), or instructional, or as an example for more ambitious projects is
-    all it is meant to be.
+	It is written in assembly language, using the MASM (ml64) assembler provided as an option within Visual Studio.
+	(currently using VS Community 2022 17.9.6)
+	It provides external signatures that allow linkage to C and C++ programs,
+	where a shell/wrapper could encapsulate the methods as part of an object.
+	It has assembly time options directing the use of Intel processor extensions: AVX4, AVX2, SIMD, or none:
+	(Z (512), Y (256), or X (128) registers, or regular Q (64bit)).
+	If processor extensions are used, the caller must align the variables declared and passed
+	on the appropriate byte boundary (e.g. alignas 64 for 512)
+	This module is very light-weight (less than 1K bytes) and relatively fast,
+	but is not intended for all processor types or all environments. 
+	Use for private (hobbyist), or instructional,
+	or as an example for more ambitious projects is all it is meant to be.
 
 	ui512b provides basic bit-oriented operations: shift left, shift right, and, or, not,
     least significant bit and most significant bit.
+
+	This module, ui512md, adds multiply and divide funnctions.
 
 Installation Instructions
 
@@ -42,7 +44,7 @@ Installation Instructions
 			Select (check) masm (.tagets, .props), Click OK
 			Project can now include assembler code.
 
-		Right click on source file "ui52a.asm"
+		Right click on source file "ui52md.asm"
 		Select Item Type (probably current value "Does not participate in build"
 		Click drop down button on right, Select "Microsoft Macro Assembler"
 		Click Excluded from Build, Set to "NO"
@@ -77,7 +79,7 @@ Usage Guidelines
 
 		In solution explorer, right click on the project name. Select "Open Folder in File Explorer"
 		In file explorer, navigate to project name, x64, debug.
-		Double click on ui512a.cod (your assembled code listing)
+		Double click on ui512md.cod (your assembled code listing)
 
 	Your .lib file is ready to be included in whatever project. It is under your project file directory,
 	x64, debug, projectname.lib
@@ -108,41 +110,28 @@ Usage Guidelines
 
 	extern "C"
 	{
-		// Note:  Unless assembled with "__UseQ", all of the u64* arguments passed must be 64 byte aligned (alignas 64); GP fault will occur if not 
+		//			signatures ( from ui512md.asm )
 
-		//	Procedures from ui512b.asm module:
-		//	EXTERN "C" signatures
+		//	EXTERNDEF	mult_u : PROC
+		//	mult_u		multiply 512 multiplicand by 512 multiplier, giving 512 product, overflow
+		//	Prototype:	void mult_u ( u64 * product, u64 * overflow, u64 * multiplicand, u64 * multiplier );
+		void mult_u ( u64*, u64*, u64*, u64* );
 
-		// shift supplied source 512bit (8 QWORDS) right, put in destination
-		// void shr_u ( u64* destination, u64* source, u32 bits_to_shift )
-		void shr_u ( u64*,  u64*, u32 );
+		//	EXTERNDEF	mult_uT64 : PROC
+		//	mult_uT64	multiply 512 bit multiplicand by 64 bit multiplier, giving 512 product, 64 bit overflow
+		//	Prototype:	void mult_uT64 ( u64 * product, u64 * overflow, u64 * multiplicand, u64 multiplier );
+		void mult_uT64 ( u64*, u64*, u64*, u64 );
 
-		// shift supplied source 512bit (8 QWORDS) left, put in destination
-	    // void shl_u ( u64* destination, u64* source, u16 bits_to_shift );
-		void shl_u ( u64*, u64*, u16 );
+		//	EXTERNDEF	div_u : PROC
+		//	div_u		divide 512 bit dividend by 512 bit divisor, giving 512 bit quotient and remainder
+		//	Prototype:	void div_u ( u64 * quotient, u64 * remainder, u64 * dividend, u64 * divisor );
+		void div_u ( u64*, u64*, u64*, u64* );
 
-		// logical 'AND' bits in lh_op, rh_op, put result in destination
-		// void and_u ( u64* destination, u64* lh_op, u64* rh_op );
-		void and_u ( u64*, u64*, u64* );
-
-		// logical 'OR' bits in lh_op, rh_op, put result in destination
-		// void or_u( u64* destination, u64* lh_op, u64* rh_op);
-		void or_u( u64*, u64*, u64* );
-
-		// logical 'NOT' bits in source, put result in destination
-		// void not_u( u64* destination, u64* source);
-		void not_u( u64* destination, u64* source);
-
-		// find most significant bit in supplied source 512bit (8 QWORDS)
-		// s16 msb_u( u64* );
-		// returns: -1 if no most significant bit, bit number otherwise, bits numbered 0 to 511 inclusive
-		s16 msb_u( u64* );
-
-		// find least significant bit in supplied source 512bit (8 QWORDS)
-		// s16 lsb_u( u64* );
-		// returns: -1 if no least significant bit, bit number otherwise, bits numbered 0 to 511 inclusive
-		s16 lsb_u( u64* );
-	};
+		//	EXTERNDEF	div_uT64 : PROC
+		//	div_uT64	divide 512 bit dividend by 64 bit divisor, giving 512 bit quotient and 64 bit remainder
+		//	Prototype:	void div_uT64 ( u64 * quotient, u64 * remainder, u64 * dividend, u64 divisor );
+		void div_uT64 ( u64*, u64, u64*, u64 );
+	}	
 
 Contributing
 
