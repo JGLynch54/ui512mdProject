@@ -191,109 +191,52 @@ mult_u		ENDP
 ;			multiplicand	-	Address of 8 QWORDS multiplicand (in R8)
 ;			multiplier		-	multiplier QWORD (in R9)
 ;			returns			-	nothing (0)
+
 			OPTION			PROLOGUE:none
 			OPTION			EPILOGUE:none
 mult_uT64	PROC			PUBLIC
+
 			LOCAL			padding1[8]:QWORD
 			LOCAL			product[16]:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
-			LOCAL			candWC:WORD
+			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR10:QWORD
 			LOCAL			padding2[8]:QWORD
-			CreateFrame		200h, savedRBP
+
+			CreateFrame		240h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
-			MOV				savedR8, R8
-			MOV				savedR9, R9
 			MOV				savedR10, R10
-			MOV				savedR11, R11
-			MOV				savedR12, R12
-			;
-			MOV				RCX, R8						; examine multiplicand
-			CALL			msb_u
-			CMP				AX, -1						; multiplicand = 0? exit with product = 0
-			JE				zeroandexit
-			CMP				AX, 0						; multiplicand = 1?	exit with product = multiplier
-			JE				setandexit
-			SHR				AX, 6
-			MOV				candWC, AX					; save off word count for multiplicand
-			;
-			BSR				RAX, [R9]					; examine multiplier
-			JZ				zeroandexit					; multiplier = 0? exit with product = 0
-			CMP				AX, 0						; multiplier = 1? exit with product = multiplicand			
-			JE				settocandandexit
-			JMP				mult
-			;
-zeroandexit:
-			MOV				RCX, savedRCX				; callers product set to zero
-			Zero512			RCX
-			XOR				RAX, RAX
-			MOV				savedRDX, RAX				; callers overflow to zero
-			JMP				exitmultnocopy
-setandexit:
-			MOV				RCX, savedRCX
-			MOV				RDX, savedR9
-			CALL			set_uT64					; set product to multiplier
-			XOR				RAX, RAX
-			MOV				savedRDX, RAX				; callers overflow to zero
-			JMP				exitmultnocopy				; and exit
-settocandandexit:
-			MOV				RCX, savedRCX				; copy (multiplicand) to callers product
-			Copy512			RCX, R8						; address of multiplicand (to be copied to product)
-			XOR				RAX, RAX
-			MOV				savedRDX, RAX				; callers overflow to zero
-			JMP				exitmultnocopy				; and exit
-mult:
+
 			LEA				RCX, product
-			Zero512			RCX							; clear working copy of product (they need to be contigous, so using working copy, not callers)
+			Zero512			RCX							; clear working copy of product and overflow
 			XOR				RAX, RAX
-			MOV				product [ 8 * 8 ], RAX		; 
-			;
-			MOV				R11, savedR9				; multiplier 
-			MOV				R12, savedR8				; address of callers multiplicand
-			MOV				R9, 7
-			SUB				R9W, candWC
-			MOV				candWC, R9W
-			MOV				R9, 7						; R9 : index for multiplicand; candWC : low limit for index
-			;
+			MOV				product [ 8 * 8 ], RAX
+
+;			multiply loop
+			MOV				R10, 7						; loop counter
 multloop:
-			MOV				R10, R9
-			INC				R10							; R10 : index for product/overflow
-			;
-			MOV				RAX, [R12] + [R9 * 8]
-			MUL				Q_PTR [R11]
-			ADD				product[R10 * 8], RAX
-			;
-			DEC				R10
-addcarryloop:
+			MOV				RAX, [ R8 ] + [ R10 * 8 ]	; R8 holds addr of multiplicand
+			MUL				R9							; R9 value of multiplier
+			ADD				product[ R10 * 8 + 8], RAX
 			ADC				product[R10 * 8], RDX
-			MOV				RDX, 0
-			JNC				nextcand
 			DEC				R10
-			JGE				addcarryloop
-nextcand:
-			DEC				R9
-			CMP				R9W, candWC
 			JGE				multloop
-;			copy working product/overflow to callers product / overflow
-			MOV				R9, 7
-			MOV				RCX, savedRCX
+
+;			copy working product / overflow to callers product / overflow
+			MOV				R10, 7
+			MOV				RCX, savedRCX				; address of callers product area
 			LEA				RDX, product[1 * 8]			; this is not 64 byte aligned, can not use copy_u
 copyloop:
-			MOV				RAX, [RDX] + [R9 * 8]
-			MOV				[RCX] + [R9 * 8], RAX
-			DEC				R9
+			MOV				RAX, Q_PTR [ RDX ] + [ R10 * 8 ]
+			MOV				Q_PTR [ RCX ] + [ R10 * 8 ], RAX
+			DEC				R10
 			JGE				copyloop
 			MOV				RAX, product [ 0 ]
 			MOV				RDX, savedRDX
-			MOV				[RDX], RAX				; callers overflow to zero
+			MOV				Q_PTR [ RDX ], RAX			
 
 ;			restore regs, release frame, return
 exitmultnocopy:			
-			MOV				R12, savedR12
-			MOV				R11, savedR11
 			MOV				R10, savedR10
-			MOV				R9,  savedR9
-			MOV				R8,  savedR8
 			MOV				RDX, savedRDX
 			MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
 			ReleaseFrame	savedRBP

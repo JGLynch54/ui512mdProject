@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/22/24 12:55:14
+Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/23/24 22:59:21
 ui512md.asm						     Page 1 - 1
 
 
@@ -472,7 +472,7 @@ ui512md.asm						     Page 1 - 1
  000000FB  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
  00000101  48/ 8D 4D 80					LEA				RCX, product[8*8]
-							Zero512			RCX							; clear working copy of product (they need to be contigous, so useing working copy, not callers)
+							Zero512			RCX							; clear working copy of product (they need to be contiguous, so using working copy, not callers)
  00000105  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
  0000010B  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
@@ -585,19 +585,21 @@ ui512md.asm						     Page 1 - 1
 				;			multiplicand	-	Address of 8 QWORDS multiplicand (in R8)
 				;			multiplier		-	multiplier QWORD (in R9)
 				;			returns			-	nothing (0)
+
 							OPTION			PROLOGUE:none
 							OPTION			EPILOGUE:none
  00000227			mult_uT64	PROC			PUBLIC
+
 							LOCAL			padding1[8]:QWORD
 							LOCAL			product[16]:QWORD
-							LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
-							LOCAL			candWC:WORD
+							LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR10:QWORD
 							LOCAL			padding2[8]:QWORD
-							CreateFrame		200h, savedRBP
+
+							CreateFrame		240h, savedRBP
  00000227  55		     1				PUSH			RBP
  00000228  48/ 8B EC	     1				MOV				RBP, RSP
- 0000022B  48/ 81 C4	     1				ADD				RSP, -((200h / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
-	   FFFFFDC0
+ 0000022B  48/ 81 C4	     1				ADD				RSP, -((240h / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
+	   FFFFFD78
  00000232  48/ C7 C0	     1				MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
 	   FFFFFFC0
  00000239  48/ 23 E0	     1				AND				RSP, RAX
@@ -609,160 +611,71 @@ ui512md.asm						     Page 1 - 1
 	   FFFFFF38
  0000024F  48/ 89 95					MOV				savedRDX, RDX
 	   FFFFFF30
- 00000256  4C/ 89 85					MOV				savedR8, R8
+ 00000256  4C/ 89 95					MOV				savedR10, R10
 	   FFFFFF20
- 0000025D  4C/ 89 8D					MOV				savedR9, R9
-	   FFFFFF18
- 00000264  4C/ 89 95					MOV				savedR10, R10
-	   FFFFFF10
- 0000026B  4C/ 89 9D					MOV				savedR11, R11
-	   FFFFFF08
- 00000272  4C/ 89 A5					MOV				savedR12, R12
-	   FFFFFF00
-							;
- 00000279  49/ 8B C8					MOV				RCX, R8						; examine multiplicand
- 0000027C  E8 00000000 E				CALL			msb_u
- 00000281  66| 83 F8 FF					CMP				AX, -1						; multiplicand = 0? exit with product = 0
- 00000285  74 1F					JE				zeroandexit
- 00000287  66| 83 F8 00					CMP				AX, 0						; multiplicand = 1?	exit with product = multiplier
- 0000028B  74 3B					JE				setandexit
- 0000028D  66| C1 E8 06					SHR				AX, 6
- 00000291  66| 89 85					MOV				candWC, AX					; save off word count for multiplicand
-	   FFFFFEFE
-							;
- 00000298  49/ 0F BD 01					BSR				RAX, [R9]					; examine multiplier
- 0000029C  74 08					JZ				zeroandexit					; multiplier = 0? exit with product = 0
- 0000029E  66| 83 F8 00					CMP				AX, 0						; multiplier = 1? exit with product = multiplicand			
- 000002A2  74 46					JE				settocandandexit
- 000002A4  EB 66					JMP				mult
-							;
- 000002A6			zeroandexit:
- 000002A6  48/ 8B 8D					MOV				RCX, savedRCX				; callers product set to zero
-	   FFFFFF38
-							Zero512			RCX
- 000002AD  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+
+ 0000025D  48/ 8D 8D					LEA				RCX, product
+	   FFFFFF40
+							Zero512			RCX							; clear working copy of product and overflow
+
+ 00000264  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 000002B3  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 0000026A  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
- 000002B9  48/ 33 C0					XOR				RAX, RAX
- 000002BC  48/ 89 85					MOV				savedRDX, RAX				; callers overflow to zero
-	   FFFFFF30
- 000002C3  E9 000000F8					JMP				exitmultnocopy
- 000002C8			setandexit:
- 000002C8  48/ 8B 8D					MOV				RCX, savedRCX
-	   FFFFFF38
- 000002CF  48/ 8B 95					MOV				RDX, savedR9
-	   FFFFFF18
- 000002D6  E8 00000000 E				CALL			set_uT64					; set product to multiplier
- 000002DB  48/ 33 C0					XOR				RAX, RAX
- 000002DE  48/ 89 85					MOV				savedRDX, RAX				; callers overflow to zero
-	   FFFFFF30
- 000002E5  E9 000000D6					JMP				exitmultnocopy				; and exit
- 000002EA			settocandandexit:
- 000002EA  48/ 8B 8D					MOV				RCX, savedRCX				; copy (multiplicand) to callers product
-	   FFFFFF38
-							Copy512			RCX, R8						; address of multiplicand (to be copied to product)
- 000002F1  62 41 FD 48/ 6F   1				VMOVDQA64		ZMM31, ZM_PTR [ R8 ]
-	   38
- 000002F7  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
-	   39
- 000002FD  48/ 33 C0					XOR				RAX, RAX
- 00000300  48/ 89 85					MOV				savedRDX, RAX				; callers overflow to zero
-	   FFFFFF30
- 00000307  E9 000000B4					JMP				exitmultnocopy				; and exit
- 0000030C			mult:
- 0000030C  48/ 8D 8D					LEA				RCX, product
-	   FFFFFF40
-							Zero512			RCX							; clear working copy of product (they need to be contigous, so using working copy, not callers)
- 00000313  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
-	   FF
- 00000319  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
-	   39
- 0000031F  48/ 33 C0					XOR				RAX, RAX
- 00000322  48/ 89 45 80					MOV				product [ 8 * 8 ], RAX		; 
-							;
- 00000326  4C/ 8B 9D					MOV				R11, savedR9				; multiplier 
-	   FFFFFF18
- 0000032D  4C/ 8B A5					MOV				R12, savedR8				; address of callers multiplicand
-	   FFFFFF20
- 00000334  49/ C7 C1					MOV				R9, 7
+ 00000270  48/ 33 C0					XOR				RAX, RAX
+ 00000273  48/ 89 45 80					MOV				product [ 8 * 8 ], RAX
+
+				;			multiply loop
+ 00000277  49/ C7 C2					MOV				R10, 7						; loop counter
 	   00000007
- 0000033B  66| 44/ 2B 8D				SUB				R9W, candWC
-	   FFFFFEFE
- 00000343  66| 44/ 89 8D				MOV				candWC, R9W
-	   FFFFFEFE
- 0000034B  49/ C7 C1					MOV				R9, 7						; R9 : index for multiplicand; candWC : low limit for index
-	   00000007
-							;
- 00000352			multloop:
- 00000352  4D/ 8B D1					MOV				R10, R9
- 00000355  49/ FF C2					INC				R10							; R10 : index for product/overflow
-							;
- 00000358  4B/ 8B 04 CC					MOV				RAX, [R12] + [R9 * 8]
- 0000035C  49/ F7 23					MUL				Q_PTR [R11]
- 0000035F  4A/ 01 84 D5					ADD				product[R10 * 8], RAX
-	   FFFFFF40
-							;
- 00000367  49/ FF CA					DEC				R10
- 0000036A			addcarryloop:
- 0000036A  4A/ 11 94 D5					ADC				product[R10 * 8], RDX
-	   FFFFFF40
- 00000372  48/ C7 C2					MOV				RDX, 0
-	   00000000
- 00000379  73 05					JNC				nextcand
- 0000037B  49/ FF CA					DEC				R10
- 0000037E  7D EA					JGE				addcarryloop
- 00000380			nextcand:
- 00000380  49/ FF C9					DEC				R9
- 00000383  66| 44/ 3B 8D				CMP				R9W, candWC
-	   FFFFFEFE
- 0000038B  7D C5					JGE				multloop
-				;			copy working product/overflow to callers product / overflow
- 0000038D  49/ C7 C1					MOV				R9, 7
-	   00000007
- 00000394  48/ 8B 8D					MOV				RCX, savedRCX
-	   FFFFFF38
- 0000039B  48/ 8D 95					LEA				RDX, product[1 * 8]			; this is not 64 byte aligned, can not use copy_u
+ 0000027E			multloop:
+ 0000027E  4B/ 8B 04 D0					MOV				RAX, [ R8 ] + [ R10 * 8 ]	; R8 holds addr of multiplicand
+ 00000282  49/ F7 E1					MUL				R9							; R9 value of multiplier
+ 00000285  4A/ 01 84 D5					ADD				product[ R10 * 8 + 8], RAX
 	   FFFFFF48
- 000003A2			copyloop:
- 000003A2  4A/ 8B 04 CA					MOV				RAX, [RDX] + [R9 * 8]
- 000003A6  4A/ 89 04 C9					MOV				[RCX] + [R9 * 8], RAX
- 000003AA  49/ FF C9					DEC				R9
- 000003AD  7D F3					JGE				copyloop
- 000003AF  48/ 8B 85					MOV				RAX, product [ 0 ]
+ 0000028D  4A/ 11 94 D5					ADC				product[R10 * 8], RDX
 	   FFFFFF40
- 000003B6  48/ 8B 95					MOV				RDX, savedRDX
+ 00000295  49/ FF CA					DEC				R10
+ 00000298  7D E4					JGE				multloop
+
+				;			copy working product / overflow to callers product / overflow
+ 0000029A  49/ C7 C2					MOV				R10, 7
+	   00000007
+ 000002A1  48/ 8B 8D					MOV				RCX, savedRCX				; address of callers product area
+	   FFFFFF38
+ 000002A8  48/ 8D 95					LEA				RDX, product[1 * 8]			; this is not 64 byte aligned, can not use copy_u
+	   FFFFFF48
+ 000002AF			copyloop:
+ 000002AF  4A/ 8B 04 D2					MOV				RAX, Q_PTR [ RDX ] + [ R10 * 8 ]
+ 000002B3  4A/ 89 04 D1					MOV				Q_PTR [ RCX ] + [ R10 * 8 ], RAX
+ 000002B7  49/ FF CA					DEC				R10
+ 000002BA  7D F3					JGE				copyloop
+ 000002BC  48/ 8B 85					MOV				RAX, product [ 0 ]
+	   FFFFFF40
+ 000002C3  48/ 8B 95					MOV				RDX, savedRDX
 	   FFFFFF30
- 000003BD  48/ 89 02					MOV				[RDX], RAX				; callers overflow to zero
+ 000002CA  48/ 89 02					MOV				Q_PTR [ RDX ], RAX			
 
 				;			restore regs, release frame, return
- 000003C0			exitmultnocopy:			
- 000003C0  4C/ 8B A5					MOV				R12, savedR12
-	   FFFFFF00
- 000003C7  4C/ 8B 9D					MOV				R11, savedR11
-	   FFFFFF08
- 000003CE  4C/ 8B 95					MOV				R10, savedR10
-	   FFFFFF10
- 000003D5  4C/ 8B 8D					MOV				R9,  savedR9
-	   FFFFFF18
- 000003DC  4C/ 8B 85					MOV				R8,  savedR8
+ 000002CD			exitmultnocopy:			
+ 000002CD  4C/ 8B 95					MOV				R10, savedR10
 	   FFFFFF20
- 000003E3  48/ 8B 95					MOV				RDX, savedRDX
+ 000002D4  48/ 8B 95					MOV				RDX, savedRDX
 	   FFFFFF30
- 000003EA  48/ 8B 8D					MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
+ 000002DB  48/ 8B 8D					MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
 	   FFFFFF38
 							ReleaseFrame	savedRBP
- 000003F1  48/ 8B AD	     1				MOV				RBP, savedRBP
+ 000002E2  48/ 8B AD	     1				MOV				RBP, savedRBP
 	   FFFFFF28
- 000003F8  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
- 000003F9  48/ 33 C0					XOR				RAX, RAX					; return zero
+ 000002E9  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
+ 000002EA  48/ 33 C0					XOR				RAX, RAX					; return zero
 							RET
- 000003FC  C3		   *	    ret    00000h
- 000003FD  48/ 8D 45 C0					LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
- 00000401  48/ 8D 85					LEA				RAX, padding2
-	   FFFFFEBC
+ 000002ED  C3		   *	    ret    00000h
+ 000002EE  48/ 8D 45 C0					LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
+ 000002F2  48/ 8D 85					LEA				RAX, padding2
+	   FFFFFEE0
 
- 00000408			mult_uT64	ENDP
+ 000002F9			mult_uT64	ENDP
 
 				;			EXTERNDEF		div_u:PROC					; void div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor)
 
@@ -775,7 +688,7 @@ ui512md.asm						     Page 1 - 1
 				;			returns			-	nothing (0)
 							OPTION			PROLOGUE:none
 							OPTION			EPILOGUE:none
- 00000408			div_u		PROC			PUBLIC
+ 000002F9			div_u		PROC			PUBLIC
 							LOCAL			padding1[8]:QWORD
 							LOCAL			qhat[16]:QWORD
 							LOCAL			rhat[8]:QWORD
@@ -789,68 +702,68 @@ ui512md.asm						     Page 1 - 1
 							LOCAL			shiftadj:WORD				; divisor adjustment to fit into one word
 							LOCAL			padding2[8]:QWORD
 							CreateFrame		240h, savedRBP
- 00000408  55		     1				PUSH			RBP
- 00000409  48/ 8B EC	     1				MOV				RBP, RSP
- 0000040C  48/ 81 C4	     1				ADD				RSP, -((240h / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
+ 000002F9  55		     1				PUSH			RBP
+ 000002FA  48/ 8B EC	     1				MOV				RBP, RSP
+ 000002FD  48/ 81 C4	     1				ADD				RSP, -((240h / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
 	   FFFFFD78
- 00000413  48/ C7 C0	     1				MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
+ 00000304  48/ C7 C0	     1				MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
 	   FFFFFFC0
- 0000041A  48/ 23 E0	     1				AND				RSP, RAX
- 0000041D  48/ 23 C5	     1				AND				RAX, RBP					; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
- 00000420  48/ 95	     1				XCHG			RAX, RBP					; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
- 00000422  48/ 89 85	     1				MOV				savedRBP, RAX			; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
+ 0000030B  48/ 23 E0	     1				AND				RSP, RAX
+ 0000030E  48/ 23 C5	     1				AND				RAX, RBP					; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
+ 00000311  48/ 95	     1				XCHG			RAX, RBP					; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
+ 00000313  48/ 89 85	     1				MOV				savedRBP, RAX			; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
 	   FFFFFE68
- 00000429  48/ 89 8D					MOV				savedRCX, RCX
+ 0000031A  48/ 89 8D					MOV				savedRCX, RCX
 	   FFFFFE78
- 00000430  48/ 89 95					MOV				savedRDX, RDX
+ 00000321  48/ 89 95					MOV				savedRDX, RDX
 	   FFFFFE70
- 00000437  4C/ 89 85					MOV				savedR8, R8
+ 00000328  4C/ 89 85					MOV				savedR8, R8
 	   FFFFFE60
- 0000043E  4C/ 89 8D					MOV				savedR9, R9
+ 0000032F  4C/ 89 8D					MOV				savedR9, R9
 	   FFFFFE58
- 00000445  4C/ 89 95					MOV				savedR10, R10
+ 00000336  4C/ 89 95					MOV				savedR10, R10
 	   FFFFFE50
- 0000044C  4C/ 89 9D					MOV				savedR11, R11
+ 0000033D  4C/ 89 9D					MOV				savedR11, R11
 	   FFFFFE48
- 00000453  4C/ 89 A5					MOV				savedR12, R12
+ 00000344  4C/ 89 A5					MOV				savedR12, R12
 	   FFFFFE40
 							;
- 0000045A  48/ 8D 8D					LEA				RCX, quotient
+ 0000034B  48/ 8D 8D					LEA				RCX, quotient
 	   FFFFFE80
 							Zero512			RCX
- 00000461  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000352  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 00000467  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000358  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
- 0000046D  48/ 8D 8D					LEA				RCX, quotient [ 8 * 8]
+ 0000035E  48/ 8D 8D					LEA				RCX, quotient [ 8 * 8]
 	   FFFFFEC0
 							Zero512			RCX
- 00000474  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000365  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000047A  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 0000036B  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
- 00000480  48/ 8D 8D					LEA				RCX, qhat
+ 00000371  48/ 8D 8D					LEA				RCX, qhat
 	   FFFFFF40
 							Zero512			RCX
- 00000487  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000378  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000048D  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 0000037E  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
- 00000493  48/ 8D 8D					LEA				RCX, rhat
+ 00000384  48/ 8D 8D					LEA				RCX, rhat
 	   FFFFFF00
 							Zero512			RCX
- 0000049A  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+ 0000038B  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 000004A0  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000391  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
- 000004A6  48/ 33 C0					XOR				RAX, RAX
- 000004A9  48/ 89 85					MOV				dadj, RAX
+ 00000397  48/ 33 C0					XOR				RAX, RAX
+ 0000039A  48/ 89 85					MOV				dadj, RAX
 	   FFFFFE38
- 000004B0  66| 89 85					MOV				normd, AX
+ 000003A1  66| 89 85					MOV				normd, AX
 	   FFFFFE2A
- 000004B7  66| 89 85					MOV				loopj, AX
+ 000003A8  66| 89 85					MOV				loopj, AX
 	   FFFFFE28
- 000004BE  66| 89 85					MOV				shiftadj, AX
+ 000003AF  66| 89 85					MOV				shiftadj, AX
 	   FFFFFE26
 							; D1 [Normalize]
 							;	Determine dimensions of u and v (dividend and divisor)
@@ -858,100 +771,100 @@ ui512md.asm						     Page 1 - 1
 							;		Handle edge cases of divisor = 0, or 1, or power of 2
 							;	Add an extra word on the front of u
 							;	Multiply (again shift) by "d" (chosen as power of two)
- 000004C5  48/ 8B 8D					MOV				RCX, savedR8				; get dimensions of dividend
+ 000003B6  48/ 8B 8D					MOV				RCX, savedR8				; get dimensions of dividend
 	   FFFFFE60
- 000004CC  E8 00000000 E				CALL			msb_u
- 000004D1  66| 89 85					MOV				mbitn, AX
+ 000003BD  E8 00000000 E				CALL			msb_u
+ 000003C2  66| 89 85					MOV				mbitn, AX
 	   FFFFFE36
- 000004D8  66| C1 E8 06					SHR				AX, 6
- 000004DC  66| 89 85					MOV				initn, AX
+ 000003C9  66| C1 E8 06					SHR				AX, 6
+ 000003CD  66| 89 85					MOV				initn, AX
 	   FFFFFE32
- 000004E3  E8 00000000 E				CALL			lsb_u
- 000004E8  66| 89 85					MOV				lbitn, AX
+ 000003D4  E8 00000000 E				CALL			lsb_u
+ 000003D9  66| 89 85					MOV				lbitn, AX
 	   FFFFFE34
 							;
- 000004EF  48/ 8B 8D					MOV				RCX, savedR9				; dimensions of divisor
+ 000003E0  48/ 8B 8D					MOV				RCX, savedR9				; dimensions of divisor
 	   FFFFFE58
- 000004F6  E8 00000000 E				CALL			msb_u						; count til most significant bit
- 000004FB  66| 89 85					MOV				mbitm, AX
+ 000003E7  E8 00000000 E				CALL			msb_u						; count til most significant bit
+ 000003EC  66| 89 85					MOV				mbitm, AX
 	   FFFFFE30
- 00000502  66| C1 E8 06					SHR				AX, 6
- 00000506  66| 89 85					MOV				initm, AX
+ 000003F3  66| C1 E8 06					SHR				AX, 6
+ 000003F7  66| 89 85					MOV				initm, AX
 	   FFFFFE2C
- 0000050D  E8 00000000 E				CALL			lsb_u						; count to least significant bit
- 00000512  66| 89 85					MOV				lbitm, AX
+ 000003FE  E8 00000000 E				CALL			lsb_u						; count to least significant bit
+ 00000403  66| 89 85					MOV				lbitm, AX
 	   FFFFFE2E
 							;
- 00000519  66| 8B 85					MOV				AX, mbitm					; divisor edge cases (zero? power of two? one?)
+ 0000040A  66| 8B 85					MOV				AX, mbitm					; divisor edge cases (zero? power of two? one?)
 	   FFFFFE30
- 00000520  66| 83 F8 00					CMP				AX, 0						; msb < 0? 
- 00000524  0F 8C 000000BE				JL				cleanret					; divisor is zero, abort (Note: no indication of fail)
- 0000052A  66| 3B 85					CMP				AX, lbitm					; msb = lsb? power of two (or one)
+ 00000411  66| 83 F8 00					CMP				AX, 0						; msb < 0? 
+ 00000415  0F 8C 000000BE				JL				cleanret					; divisor is zero, abort (Note: no indication of fail)
+ 0000041B  66| 3B 85					CMP				AX, lbitm					; msb = lsb? power of two (or one)
 	   FFFFFE2E
- 00000531  75 60					JNZ				notpow2
+ 00000422  75 60					JNZ				notpow2
 
 							;	for power of two divisor (or one), shift, with shifted out bits going to remainder, exit
 
- 00000533  48/ 8B 95					MOV				RDX, savedR8				; address of dividend
+ 00000424  48/ 8B 95					MOV				RDX, savedR8				; address of dividend
 	   FFFFFE60
- 0000053A  48/ 8B 8D					MOV				RCX, savedRDX				; address of callers remainder
+ 0000042B  48/ 8B 8D					MOV				RCX, savedRDX				; address of callers remainder
 	   FFFFFE70
- 00000541  49/ C7 C0					MOV				R8, 512
+ 00000432  49/ C7 C0					MOV				R8, 512
 	   00000200
- 00000548  66| 44/ 2B 85				SUB				R8W, lbitm					; shift out all high bits
+ 00000439  66| 44/ 2B 85				SUB				R8W, lbitm					; shift out all high bits
 	   FFFFFE2E
- 00000550  E8 00000000 E				CALL			shl_u
- 00000555  48/ 8B 95					MOV				RDX, savedRDX
+ 00000441  E8 00000000 E				CALL			shl_u
+ 00000446  48/ 8B 95					MOV				RDX, savedRDX
 	   FFFFFE70
- 0000055C  48/ 8B CA					MOV				RCX, RDX
- 0000055F  49/ C7 C0					MOV				R8, 512
+ 0000044D  48/ 8B CA					MOV				RCX, RDX
+ 00000450  49/ C7 C0					MOV				R8, 512
 	   00000200
- 00000566  66| 44/ 2B 85				SUB				R8W, lbitm
+ 00000457  66| 44/ 2B 85				SUB				R8W, lbitm
 	   FFFFFE2E
- 0000056E  E8 00000000 E				CALL			shr_u						; shift back with destination the remainder, eliminating high bits
- 00000573  48/ 8B 8D					MOV				RCX, savedRCX				; callers quotient (even if zero bits shifted, this copies to callers vars)
+ 0000045F  E8 00000000 E				CALL			shr_u						; shift back with destination the remainder, eliminating high bits
+ 00000464  48/ 8B 8D					MOV				RCX, savedRCX				; callers quotient (even if zero bits shifted, this copies to callers vars)
 	   FFFFFE78
- 0000057A  48/ 8B 95					MOV				RDX, savedR8				; callers dividend
+ 0000046B  48/ 8B 95					MOV				RDX, savedR8				; callers dividend
 	   FFFFFE60
- 00000581  4D/ 33 C0					XOR				R8, R8
- 00000584  66| 44/ 8B 85				MOV				R8W, lbitm
+ 00000472  4D/ 33 C0					XOR				R8, R8
+ 00000475  66| 44/ 8B 85				MOV				R8W, lbitm
 	   FFFFFE2E
- 0000058C  E8 00000000 E				CALL			shr_u						; shift dividend n bits to make quotient
- 00000591  EB 55					JMP				cleanret
- 00000593			notpow2:
- 00000593  66| 8B 85					MOV				AX, mbitm
+ 0000047D  E8 00000000 E				CALL			shr_u						; shift dividend n bits to make quotient
+ 00000482  EB 55					JMP				cleanret
+ 00000484			notpow2:
+ 00000484  66| 8B 85					MOV				AX, mbitm
 	   FFFFFE30
- 0000059A  66| 83 F0 3F					XOR				AX, 03fh
- 0000059E  66| 83 F8 3C					CMP				AX, 60
- 000005A2  7D 13					JGE				no_d_adj
- 000005A4  66| 41/ B8					MOV				R8W, 63
+ 0000048B  66| 83 F0 3F					XOR				AX, 03fh
+ 0000048F  66| 83 F8 3C					CMP				AX, 60
+ 00000493  7D 13					JGE				no_d_adj
+ 00000495  66| 41/ B8					MOV				R8W, 63
 	   003F
- 000005A9  66| 44/ 2B C0				SUB				R8W, AX
- 000005AD  66| 44/ 89 85				MOV				normd, R8W
+ 0000049A  66| 44/ 2B C0				SUB				R8W, AX
+ 0000049E  66| 44/ 89 85				MOV				normd, R8W
 	   FFFFFE2A
- 000005B5  EB 0A					JMP				copyw
- 000005B7			no_d_adj:
- 000005B7  48/ 33 C0					XOR				RAX, RAX
- 000005BA  66| 89 85					MOV				normd, AX
+ 000004A6  EB 0A					JMP				copyw
+ 000004A8			no_d_adj:
+ 000004A8  48/ 33 C0					XOR				RAX, RAX
+ 000004AB  66| 89 85					MOV				normd, AX
 	   FFFFFE2A
 
 							; copy to work area, adding extra leading word, shifting (mult) by 'd'
- 000005C1			copyw:
+ 000004B2			copyw:
 							; shift is at most 62 bits, so get bits from first word
- 000005C1  48/ 8B 95					MOV				RDX, savedR9				; address of divisor
+ 000004B2  48/ 8B 95					MOV				RDX, savedR9				; address of divisor
 	   FFFFFE58
- 000005C8  48/ C7 C1					MOV				RCX, 7
+ 000004B9  48/ C7 C1					MOV				RCX, 7
 	   00000007
- 000005CF  66| 2B 8D					SUB				CX, initm
+ 000004C0  66| 2B 8D					SUB				CX, initm
 	   FFFFFE2C
- 000005D6  48/ 8D 14 CA					LEA				RDX, [RDX] + [RCX * 8]
+ 000004C7  48/ 8D 14 CA					LEA				RDX, [RDX] + [RCX * 8]
 
 
 							; D2 [Initialize]
 							;	loop counter "j", starting at word count of u ("m")
- 000005DA  66| 8B 85					MOV				AX, initm
+ 000004CB  66| 8B 85					MOV				AX, initm
 	   FFFFFE2C
- 000005E1  66| 89 85					MOV				loopj, AX
+ 000004D2  66| 89 85					MOV				loopj, AX
 	   FFFFFE28
 							; D3 [Calculate q]
 							;	Initial guess q is qhat, remainder r is rhat
@@ -983,32 +896,32 @@ ui512md.asm						     Page 1 - 1
 							;	Clean up and return
 							;   
 							;
- 000005E8			cleanret:
- 000005E8  4C/ 8B A5					MOV				R12, savedR12
+ 000004D9			cleanret:
+ 000004D9  4C/ 8B A5					MOV				R12, savedR12
 	   FFFFFE40
- 000005EF  4C/ 8B 9D					MOV				R11, savedR11
+ 000004E0  4C/ 8B 9D					MOV				R11, savedR11
 	   FFFFFE48
- 000005F6  4C/ 8B 95					MOV				R10, savedR10
+ 000004E7  4C/ 8B 95					MOV				R10, savedR10
 	   FFFFFE50
- 000005FD  4C/ 8B 8D					MOV				R9,  savedR9
+ 000004EE  4C/ 8B 8D					MOV				R9,  savedR9
 	   FFFFFE58
- 00000604  4C/ 8B 85					MOV				R8,  savedR8
+ 000004F5  4C/ 8B 85					MOV				R8,  savedR8
 	   FFFFFE60
- 0000060B  48/ 8B 95					MOV				RDX, savedRDX
+ 000004FC  48/ 8B 95					MOV				RDX, savedRDX
 	   FFFFFE70
- 00000612  48/ 8B 8D					MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
+ 00000503  48/ 8B 8D					MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
 	   FFFFFE78
 							ReleaseFrame	savedRBP
- 00000619  48/ 8B AD	     1				MOV				RBP, savedRBP
+ 0000050A  48/ 8B AD	     1				MOV				RBP, savedRBP
 	   FFFFFE68
- 00000620  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
- 00000621  48/ 33 C0					XOR				RAX, RAX					; return zero
+ 00000511  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
+ 00000512  48/ 33 C0					XOR				RAX, RAX					; return zero
 							RET
- 00000624  C3		   *	    ret    00000h
- 00000625  48/ 8D 45 C0					LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
- 00000629  48/ 8D 85					LEA				RAX, padding2
+ 00000515  C3		   *	    ret    00000h
+ 00000516  48/ 8D 45 C0					LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
+ 0000051A  48/ 8D 85					LEA				RAX, padding2
 	   FFFFFDE4
- 00000630			div_u		ENDP
+ 00000521			div_u		ENDP
 
 				;			EXTERNDEF		div_uT64:PROC				; div_uT64( u64* quotient, u64* remainder, u64* dividend, u64 divisor)
 
@@ -1021,81 +934,81 @@ ui512md.asm						     Page 1 - 1
 
 							OPTION			PROLOGUE:none
 							OPTION			EPILOGUE:none
- 00000630			div_uT64	PROC			PUBLIC
+ 00000521			div_uT64	PROC			PUBLIC
 							LOCAL			padding1[8]:QWORD
 							LOCAL			quotient[16]:QWORD
 							LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
 							LOCAL			padding2[8]:QWORD
 							CreateFrame		200h, savedRBP
- 00000630  55		     1				PUSH			RBP
- 00000631  48/ 8B EC	     1				MOV				RBP, RSP
- 00000634  48/ 81 C4	     1				ADD				RSP, -((200h / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
+ 00000521  55		     1				PUSH			RBP
+ 00000522  48/ 8B EC	     1				MOV				RBP, RSP
+ 00000525  48/ 81 C4	     1				ADD				RSP, -((200h / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
 	   FFFFFDC0
- 0000063B  48/ C7 C0	     1				MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
+ 0000052C  48/ C7 C0	     1				MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
 	   FFFFFFC0
- 00000642  48/ 23 E0	     1				AND				RSP, RAX
- 00000645  48/ 23 C5	     1				AND				RAX, RBP					; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
- 00000648  48/ 95	     1				XCHG			RAX, RBP					; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
- 0000064A  48/ 89 85	     1				MOV				savedRBP, RAX			; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
+ 00000533  48/ 23 E0	     1				AND				RSP, RAX
+ 00000536  48/ 23 C5	     1				AND				RAX, RBP					; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
+ 00000539  48/ 95	     1				XCHG			RAX, RBP					; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
+ 0000053B  48/ 89 85	     1				MOV				savedRBP, RAX			; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
 	   FFFFFF28
- 00000651  48/ 89 8D					MOV				savedRCX, RCX
+ 00000542  48/ 89 8D					MOV				savedRCX, RCX
 	   FFFFFF38
- 00000658  48/ 89 95					MOV				savedRDX, RDX
+ 00000549  48/ 89 95					MOV				savedRDX, RDX
 	   FFFFFF30
- 0000065F  4C/ 89 85					MOV				savedR8, R8
+ 00000550  4C/ 89 85					MOV				savedR8, R8
 	   FFFFFF20
- 00000666  4C/ 89 8D					MOV				savedR9, R9
+ 00000557  4C/ 89 8D					MOV				savedR9, R9
 	   FFFFFF18
- 0000066D  4C/ 89 95					MOV				savedR10, R10
+ 0000055E  4C/ 89 95					MOV				savedR10, R10
 	   FFFFFF10
- 00000674  4C/ 89 9D					MOV				savedR11, R11
+ 00000565  4C/ 89 9D					MOV				savedR11, R11
 	   FFFFFF08
- 0000067B  4C/ 89 A5					MOV				savedR12, R12
+ 0000056C  4C/ 89 A5					MOV				savedR12, R12
 	   FFFFFF00
 							;
- 00000682  48/ 8D 8D					LEA				RCX, quotient
+ 00000573  48/ 8D 8D					LEA				RCX, quotient
 	   FFFFFF40
 							Zero512			RCX
- 00000689  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+ 0000057A  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000068F  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000580  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
- 00000695  48/ 8D 4D 80					LEA				RCX, quotient [ 8 * 8]
+ 00000586  48/ 8D 4D 80					LEA				RCX, quotient [ 8 * 8]
 							Zero512			RCX
- 00000699  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+ 0000058A  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000069F  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000590  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 
 							;
- 000006A5  4C/ 8B A5					MOV				R12, savedR12
+ 00000596  4C/ 8B A5					MOV				R12, savedR12
 	   FFFFFF00
- 000006AC  4C/ 8B 9D					MOV				R11, savedR11
+ 0000059D  4C/ 8B 9D					MOV				R11, savedR11
 	   FFFFFF08
- 000006B3  4C/ 8B 95					MOV				R10, savedR10
+ 000005A4  4C/ 8B 95					MOV				R10, savedR10
 	   FFFFFF10
- 000006BA  4C/ 8B 8D					MOV				R9,  savedR9
+ 000005AB  4C/ 8B 8D					MOV				R9,  savedR9
 	   FFFFFF18
- 000006C1  4C/ 8B 85					MOV				R8,  savedR8
+ 000005B2  4C/ 8B 85					MOV				R8,  savedR8
 	   FFFFFF20
- 000006C8  48/ 8B 95					MOV				RDX, savedRDX
+ 000005B9  48/ 8B 95					MOV				RDX, savedRDX
 	   FFFFFF30
- 000006CF  48/ 8B 8D					MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
+ 000005C0  48/ 8B 8D					MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
 	   FFFFFF38
 							ReleaseFrame	savedRBP
- 000006D6  48/ 8B AD	     1				MOV				RBP, savedRBP
+ 000005C7  48/ 8B AD	     1				MOV				RBP, savedRBP
 	   FFFFFF28
- 000006DD  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
- 000006DE  48/ 33 C0					XOR				RAX, RAX					; return zero
+ 000005CE  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
+ 000005CF  48/ 33 C0					XOR				RAX, RAX					; return zero
 							RET
- 000006E1  C3		   *	    ret    00000h
- 000006E2  48/ 8D 45 C0					LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
- 000006E6  48/ 8D 85					LEA				RAX, padding2
+ 000005D2  C3		   *	    ret    00000h
+ 000005D3  48/ 8D 45 C0					LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
+ 000005D7  48/ 8D 85					LEA				RAX, padding2
 	   FFFFFEC0
- 000006ED			div_uT64	ENDP
+ 000005DE			div_uT64	ENDP
 
 							END
-Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/22/24 12:55:14
+Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/23/24 22:59:21
 ui512md.asm						     Symbols 2 - 1
 
 
@@ -1115,7 +1028,7 @@ Procedures, parameters, and locals:
 
                 N a m e                 Type     Value    Attr
 
-div_uT64 . . . . . . . . . . . .	P 	 00000630 _TEXT	Length= 000000BD Public
+div_uT64 . . . . . . . . . . . .	P 	 00000521 _TEXT	Length= 000000BD Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   quotient . . . . . . . . . . .	QWord	 rbp - 000000C0
   savedRCX . . . . . . . . . . .	QWord	 rbp - 000000C8
@@ -1127,7 +1040,7 @@ div_uT64 . . . . . . . . . . . .	P 	 00000630 _TEXT	Length= 000000BD Public
   savedR11 . . . . . . . . . . .	QWord	 rbp - 000000F8
   savedR12 . . . . . . . . . . .	QWord	 rbp - 00000100
   padding2 . . . . . . . . . . .	QWord	 rbp - 00000140
-div_u  . . . . . . . . . . . . .	P 	 00000408 _TEXT	Length= 00000228 Public
+div_u  . . . . . . . . . . . . .	P 	 000002F9 _TEXT	Length= 00000228 Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   qhat . . . . . . . . . . . . .	QWord	 rbp - 000000C0
   rhat . . . . . . . . . . . . .	QWord	 rbp - 00000100
@@ -1151,32 +1064,21 @@ div_u  . . . . . . . . . . . . .	P 	 00000408 _TEXT	Length= 00000228 Public
   loopj  . . . . . . . . . . . .	Word	 rbp - 000001D8
   shiftadj . . . . . . . . . . .	Word	 rbp - 000001DA
   padding2 . . . . . . . . . . .	QWord	 rbp - 0000021C
-  notpow2  . . . . . . . . . . .	L 	 00000593 _TEXT	
-  no_d_adj . . . . . . . . . . .	L 	 000005B7 _TEXT	
-  copyw  . . . . . . . . . . . .	L 	 000005C1 _TEXT	
-  cleanret . . . . . . . . . . .	L 	 000005E8 _TEXT	
-mult_uT64  . . . . . . . . . . .	P 	 00000227 _TEXT	Length= 000001E1 Public
+  notpow2  . . . . . . . . . . .	L 	 00000484 _TEXT	
+  no_d_adj . . . . . . . . . . .	L 	 000004A8 _TEXT	
+  copyw  . . . . . . . . . . . .	L 	 000004B2 _TEXT	
+  cleanret . . . . . . . . . . .	L 	 000004D9 _TEXT	
+mult_uT64  . . . . . . . . . . .	P 	 00000227 _TEXT	Length= 000000D2 Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   product  . . . . . . . . . . .	QWord	 rbp - 000000C0
   savedRCX . . . . . . . . . . .	QWord	 rbp - 000000C8
   savedRDX . . . . . . . . . . .	QWord	 rbp - 000000D0
   savedRBP . . . . . . . . . . .	QWord	 rbp - 000000D8
-  savedR8  . . . . . . . . . . .	QWord	 rbp - 000000E0
-  savedR9  . . . . . . . . . . .	QWord	 rbp - 000000E8
-  savedR10 . . . . . . . . . . .	QWord	 rbp - 000000F0
-  savedR11 . . . . . . . . . . .	QWord	 rbp - 000000F8
-  savedR12 . . . . . . . . . . .	QWord	 rbp - 00000100
-  candWC . . . . . . . . . . . .	Word	 rbp - 00000102
-  padding2 . . . . . . . . . . .	QWord	 rbp - 00000144
-  zeroandexit  . . . . . . . . .	L 	 000002A6 _TEXT	
-  setandexit . . . . . . . . . .	L 	 000002C8 _TEXT	
-  settocandandexit . . . . . . .	L 	 000002EA _TEXT	
-  mult . . . . . . . . . . . . .	L 	 0000030C _TEXT	
-  multloop . . . . . . . . . . .	L 	 00000352 _TEXT	
-  addcarryloop . . . . . . . . .	L 	 0000036A _TEXT	
-  nextcand . . . . . . . . . . .	L 	 00000380 _TEXT	
-  copyloop . . . . . . . . . . .	L 	 000003A2 _TEXT	
-  exitmultnocopy . . . . . . . .	L 	 000003C0 _TEXT	
+  savedR10 . . . . . . . . . . .	QWord	 rbp - 000000E0
+  padding2 . . . . . . . . . . .	QWord	 rbp - 00000120
+  multloop . . . . . . . . . . .	L 	 0000027E _TEXT	
+  copyloop . . . . . . . . . . .	L 	 000002AF _TEXT	
+  exitmultnocopy . . . . . . . .	L 	 000002CD _TEXT	
 mult_u . . . . . . . . . . . . .	P 	 00000000 _TEXT	Length= 00000227 Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   product  . . . . . . . . . . .	QWord	 rbp - 000000C0

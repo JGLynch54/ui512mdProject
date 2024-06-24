@@ -119,42 +119,43 @@ namespace ui512mdTests
 		{
 			// mult_u tests
 			// multistage testing, part for use as debugging, progressively "real" testing
-			// Note: the ui512a module must pass testing before these tests, as adds are used in this test
-			// Note: the ui512b module must pass testing before these tests, as shifts are used in this test
+			// Note: the ui512a module must pass testing before these tests, as zero, add, and set are used in this test
+			// Note: the ui512b module must pass testing before these tests, as 'or' and shifts are used in this test
+
 			u64 seed = 0;
-			alignas ( 64 ) u64 num1 [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 num2 [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 num3 [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 product [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 overflow [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 intermediateprod [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 intermediateovrf [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 expectedproduct [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 expectedoverflow [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
+			alignas ( 64 ) u64 num1 [ 8 ] { 0 };
+			alignas ( 64 ) u64 num2 [ 8 ] { 0 };
+			alignas ( 64 ) u64 num3 [ 8 ] { 0 };
+			alignas ( 64 ) u64 product [ 8 ] { 0 };
+			alignas ( 64 ) u64 overflow [ 8 ] { 0 };
+			alignas ( 64 ) u64 intermediateprod [ 8 ] { 0 };
+			alignas ( 64 ) u64 intermediateovrf [ 8 ] { 0 };
+			alignas ( 64 ) u64 expectedproduct [ 8 ] { 0 };
+			alignas ( 64 ) u64 expectedoverflow [ 8 ] { 0 };
 
 			// First test, a simple multiply by two. 
 			// Easy to check as the answer is a shift left, overflow is a shift right
 			for ( int i = 0; i < runcount; i++ )
 			{
+				//	random initialize mutiplicand
 				for ( int j = 0; j < 8; j++ )
 				{
 					num1 [ j ] = RandomU64 ( &seed );
-					num2 [ j ] = 0;
-					product [ j ] = 0;
-					overflow [ j ] = 0;
-					expectedproduct [ j ] = 0;
-					expectedoverflow [ j ] = 0;
 				};
 
-				num2 [ 7 ] = 2;
+				//	initialize multiplier
+				set_uT64 ( num2, 2ull );
+
+				// calculate expected product
 				shl_u ( expectedproduct, num1, u16 ( 1 ) );
-				if ( expectedproduct [ 7 ] == 0ull )
-				{
-					break;
-				};
-				Assert::AreNotEqual ( 0ull, expectedproduct [ 7 ] );
+
+				// calculate expected overflow
 				shr_u ( expectedoverflow, num1, u16 ( 511 ) );
+
+				// execute function under test (multiply)
 				mult_u ( product, overflow, num1, num2 );
+
+				//	check actual vs. expected
 				for ( int j = 0; j < 8; j++ )
 				{
 					Assert::AreEqual ( expectedproduct [ j ], product [ j ], MSG ( L"Product at " << j << " failed " << i ) );
@@ -173,18 +174,16 @@ namespace ui512mdTests
 				for ( int j = 0; j < 8; j++ )
 				{
 					num1 [ j ] = RandomU64 ( &seed );
-					num2 [ j ] = 0;
-					product [ j ] = 0;
-					overflow [ j ] = 0;
-					expectedproduct [ j ] = 0;
-					expectedoverflow [ j ] = 0;
 				};
 
-				num2 [ 7 ] = 1;
-				u16 nrShift = RandomU64 ( &seed ) % 512 - 1;
+				set_uT64 ( num2, 1ull );
+				u16 nrShift = RandomU64 ( &seed ) % 512;
 				shl_u ( num2, num2, nrShift );
+
 				shl_u ( expectedproduct, num1, nrShift );
-				shr_u ( expectedoverflow, num1, 512 - nrShift );
+
+				shr_u ( expectedoverflow, num1, ( 512 - nrShift ) );
+
 				mult_u ( product, overflow, num1, num2 );
 				for ( int j = 0; j < 8; j++ )
 				{
@@ -201,38 +200,29 @@ namespace ui512mdTests
 			// Building "expected" is a bit more complicated
 			for ( int i = 0; i < runcount; i++ )
 			{
-				const u16 nrBits = 128;
+				const u16 nrBits = 128;			// the generated random number will have nrBits randomly selected and "on"
 				u16 bitcnt = 0;
-				bool nubit = false;
 				u16 BitsUsed [ nrBits ] = { 0 }; // intialize all to zero
 				fill_n ( BitsUsed, nrBits, 0 );
 				for ( int j = 0; j < 8; j++ )
 				{
 					num1 [ j ] = RandomU64 ( &seed );
-					num2 [ j ] = 0;
-					num3 [ j ] = 0;
-					product [ j ] = 0;
-					overflow [ j ] = 0;
-					intermediateprod [ j ] = 0;
-					intermediateovrf [ j ] = 0;
-					expectedproduct [ j ] = 0;
-					expectedoverflow [ j ] = 0;
 				};
+
+				zero_u ( num2 );
+				zero_u ( expectedproduct );
+				zero_u ( expectedoverflow );
 
 				// build multiplier as 'N' number of random bits (avoid duplicate bits)
 				// simultaneously build expected result
 				for ( int j = 0; j < nrBits; j++ )
 				{
-					for ( int j3 = 0; j3 < 8; j3++ )
-					{
-						intermediateprod [ j3 ] = 0;
-						intermediateovrf [ j3 ] = 0;
-						num3 [ j3 ] = 0;
-					};
+					zero_u ( intermediateprod );
+					zero_u ( intermediateovrf );
 
-					// Find a bit (0 -> 512) that hasn't already been used in this random number
-					u16 nrShift = RandomU64 ( &seed ) % 512 - 1;
-					u16 k = 0;
+					// Find a bit (0 to 511) that hasn't already been selected in this random number
+					bool nubit = false;
+					u16 nrShift = RandomU64 ( &seed ) % 512;
 					while ( !nubit )
 					{
 						u16 j2 = 0;
@@ -245,7 +235,7 @@ namespace ui512mdTests
 						};
 						if ( nrShift == BitsUsed [ j2 ] )
 						{
-							nrShift = RandomU64 ( &seed ) % 512 - 1;
+							nrShift = RandomU64 ( &seed ) % 512;
 						}
 						else
 						{
@@ -256,10 +246,12 @@ namespace ui512mdTests
 
 					// use selected bit to build a random number (through shift/add)
 					// then build / project expected result of multiply (also through shift / add)
-					num3 [ 7 ] = 1;
+
 					// Multiplier:
+					set_uT64 ( num3, 1ull );
 					shl_u ( num3, num3, nrShift );
-					add_u ( num2, num2, num3 );
+					or_u ( num2, num2, num3 );
+
 					// Expected:
 					shl_u ( intermediateprod, num1, nrShift );
 					s32 carry = add_u ( expectedproduct, expectedproduct, intermediateprod );
@@ -288,17 +280,15 @@ namespace ui512mdTests
 		TEST_METHOD ( ui512md_01_mul_timing )
 		{
 			u64 seed = 0;
-			alignas ( 64 ) u64 num1 [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 num2 [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 product [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 overflow [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
+			alignas ( 64 ) u64 num1 [ 8 ] { 0 };
+			alignas ( 64 ) u64 num2 [ 8 ] { 0 };
+			alignas ( 64 ) u64 product [ 8 ] { 0 };
+			alignas ( 64 ) u64 overflow [ 8 ] { 0 };
 
 			for ( int i = 0; i < 8; i++ )
 			{
 				num1 [ i ] = RandomU64 ( &seed );
 				num2 [ i ] = RandomU64 ( &seed );
-				product [ i ] = 0;
-				overflow [ i ] = 0;
 			}
 
 			for ( int i = 0; i < timingcount; i++ )
@@ -309,48 +299,177 @@ namespace ui512mdTests
 			string runmsg = "Multiply function timing. Ran " + to_string ( timingcount ) + " times.\n";
 			Logger::WriteMessage ( runmsg.c_str ( ) );
 		};
-		//
-		//		TEST_METHOD ( ui512md_02_mul64 )
-		//		{
-		//			u64 seed = 0;
-		//			alignas ( 64 ) u64 num1 [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-		//			alignas ( 64 ) u64 product [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-		//			u64 num2;
-		//			u64 overflow;
-		//			for ( int i = 0; i < runcount; i++ )
-		//			{
-		//				for ( int j = 0; j < 8; j++ )
-		//				{
-		//					num1 [ j ] = RandomU64 ( &seed );
-		//					product [ j ] = 0;
-		//				};
-		//				overflow = 0;
-		//				num2 = RandomU64 ( &seed );
-		//				;
-		//				mult_uT64 ( product, &overflow, num1, num2 );
-		//
-		//
-		//			};
-		//			string runmsg = "Multiply function testing. Ran tests " + to_string ( runcount ) + " times, each with pseudo random values.\n";;
-		//			Logger::WriteMessage ( runmsg.c_str ( ) );
-		//			//	Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
-		//
-		//		};
-		//
+
+		TEST_METHOD ( ui512md_02_mul64 )
+		{
+			// mult_u tests
+			// multistage testing, part for use as debugging, progressively "real" testing
+			// Note: the ui512a module must pass testing before these tests, as adds are used in this test
+			// Note: the ui512b module must pass testing before these tests, as 'or' and shifts are used in this test
+			u64 seed = 0;
+			alignas ( 64 ) u64 num1 [ 8 ] { 0 };
+			alignas ( 64 ) u64 product [ 8 ] { 0 };
+			alignas ( 64 ) u64 intermediateprod [ 8 ] { 0 };
+			alignas ( 64 ) u64 expectedproduct [ 8 ] { 0 };
+
+			u64 num2 = 0;
+			u64 num3 = 0;
+			u64 overflow = 0;
+			u64 intermediateovrf = 0;
+			u64 expectedoverflow = 0;
+
+			// First test, a simple multiply by two. 
+			// Easy to check as the answer is a shift left, overflow is a shift right
+			for ( int i = 0; i < runcount; i++ )
+			{
+				for ( int j = 0; j < 8; j++ )
+				{
+					num1 [ j ] = RandomU64 ( &seed );
+				};
+
+				num2 = 2;
+				shl_u ( expectedproduct, num1, u16 ( 1 ) );
+				expectedoverflow = num1 [ 0 ] >> 63;
+
+				mult_uT64 ( product, &overflow, num1, num2 );
+
+				for ( int j = 0; j < 8; j++ )
+				{
+					Assert::AreEqual ( expectedproduct [ j ], product [ j ], MSG ( L"Product at " << j << " failed " << i ) );
+				};
+
+				Assert::AreEqual ( expectedoverflow, overflow, MSG ( L"Overflow failed " << i ) );
+			};
+
+			string runmsg1 = "Multiply function testing. Simple multiply by 2 " + to_string ( runcount ) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage ( runmsg1.c_str ( ) );
+			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
+
+			// Second test, a simple multiply by a sequential powers of two. 
+			// Still relatively easy to check as answer is a shift left, overflow is a shift right
+			for ( u16 nrShift = 1; nrShift < 64; nrShift++ )
+			{
+				for ( int j = 0; j < 8; j++ )
+				{
+					num1 [ j ] = RandomU64 ( &seed );
+				};
+
+				num2 = 1ull << nrShift;
+				shl_u ( expectedproduct, num1, nrShift );
+				expectedoverflow = num1 [ 0 ] >> ( 64 - nrShift );
+
+				mult_uT64 ( product, &overflow, num1, num2 );
+
+				for ( int j = 0; j < 8; j++ )
+				{
+					Assert::AreEqual ( expectedproduct [ j ], product [ j ], MSG ( L"Product at " << j << " failed " << nrShift ) );
+				}
+				Assert::AreEqual ( expectedoverflow, overflow, MSG ( L"Overflow failed " << nrShift ) );
+			};
+
+			string runmsg2 = "Multiply function testing. Multiply by sequential powers of 2 " + to_string ( 63 ) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage ( runmsg2.c_str ( ) );
+			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
+
+			//	// Third test, a multiply by random sums of powers of two. 
+			//	// Building "expected" is a bit more complicated
+			//	for ( int i = 0; i < runcount; i++ )
+			//	{
+			//		const u16 nrBits = 128;
+			//		u16 bitcnt = 0;
+			//		bool nubit = false;
+			//		u16 BitsUsed [ nrBits ] = { 0 }; // intialize all to zero
+			//		fill_n ( BitsUsed, nrBits, 0 );
+			//		for ( int j = 0; j < 8; j++ )
+			//		{
+			//			num1 [ j ] = RandomU64 ( &seed );
+			//			num2 [ j ] = 0;
+			//			num3 [ j ] = 0;
+			//			product [ j ] = 0;
+			//			overflow [ j ] = 0;
+			//			intermediateprod [ j ] = 0;
+			//			intermediateovrf [ j ] = 0;
+			//			expectedproduct [ j ] = 0;
+			//			expectedoverflow [ j ] = 0;
+			//		};
+
+			//		// build multiplier as 'N' number of random bits (avoid duplicate bits)
+			//		// simultaneously build expected result
+			//		for ( int j = 0; j < nrBits; j++ )
+			//		{
+			//			zero_u ( intermediateprod );
+			//			zero_u ( intermediateovrf );
+
+			//			// Find a bit (0 -> 512) that hasn't already been used in this random number
+			//			u16 nrShift = RandomU64 ( &seed ) % 512 - 1;
+			//			u16 k = 0;
+			//			while ( !nubit )
+			//			{
+			//				u16 j2 = 0;
+			//				for ( ; j2 < bitcnt; j2++ )
+			//				{
+			//					if ( nrShift == BitsUsed [ j2 ] )
+			//					{
+			//						break;
+			//					}
+			//				};
+			//				if ( nrShift == BitsUsed [ j2 ] )
+			//				{
+			//					nrShift = RandomU64 ( &seed ) % 512 - 1;
+			//				}
+			//				else
+			//				{
+			//					nubit = true;
+			//					BitsUsed [ bitcnt++ ] = nrShift;
+			//				};
+			//			};
+
+			//			// use selected bit to build a random number (through shift/add)
+			//			// then build / project expected result of multiply (also through shift / add)
+
+			//			// Multiplier:
+			//			set_uT64 ( num3, 1ull );
+			//			shl_u ( num3, num3, nrShift );
+			//			add_u ( num2, num2, num3 );
+
+			//			// Expected:
+			//			shl_u ( intermediateprod, num1, nrShift );
+			//			s32 carry = add_u ( expectedproduct, expectedproduct, intermediateprod );
+			//			shr_u ( intermediateovrf, num1, 512 - nrShift );
+			//			add_u ( expectedoverflow, expectedoverflow, intermediateovrf );
+			//			if ( carry != 0 )
+			//			{
+			//				u64 addone = 1;
+			//				add_uT64 ( expectedoverflow, expectedoverflow, addone );
+			//			};
+			//		};
+
+			//		mult_u ( product, overflow, num1, num2 );
+			//		for ( int j = 0; j < 8; j++ )
+			//		{
+			//			Assert::AreEqual ( expectedproduct [ j ], product [ j ], MSG ( L"Product at " << j << " failed " << i ) );
+			//			Assert::AreEqual ( expectedoverflow [ j ], overflow [ j ], MSG ( L"Overflow at " << j << " failed " << i ) );
+			//		}
+			//	};
+
+			//	string runmsg3 = "Multiply function testing. Multiply by random number " + to_string ( runcount ) + " times, each with pseudo random values.\n";;
+			//	Logger::WriteMessage ( runmsg3.c_str ( ) );
+			//	Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
+		};
+
 		TEST_METHOD ( ui512md_02_mul64_timing )
 		{
 			u64 seed = 0;
-			alignas ( 64 ) u64 num1 [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			alignas ( 64 ) u64 product [ 8 ] { 0, 0, 0, 0, 0, 0, 0, 0 };
-			u64 num2;
-			u64 overflow;
+			alignas ( 64 ) u64 num1 [ 8 ] { 0 };
+			alignas ( 64 ) u64 product [ 8 ] { 0 };
+			u64 num2 = 0;
+			u64 overflow = 0;
 
 			for ( int j = 0; j < 8; j++ )
 			{
 				num1 [ j ] = RandomU64 ( &seed );
-				product [ j ] = 0;
 			};
-			overflow = 0;
+
 			num2 = RandomU64 ( &seed );
 
 			for ( int i = 0; i < timingcount; i++ )
