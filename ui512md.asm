@@ -69,12 +69,14 @@
 			OPTION			PROLOGUE:none
 			OPTION			EPILOGUE:none
 mult_u		PROC			PUBLIC
+
 			LOCAL			padding1[8]:QWORD
 			LOCAL			product[16]:QWORD
 			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD
 			LOCAL			savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
 			LOCAL			plierWC:WORD, candWC:WORD
 			LOCAL			padding2[8]:QWORD
+
 			CreateFrame		240h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
@@ -235,7 +237,6 @@ copyloop:
 			MOV				Q_PTR [ RDX ], RAX			
 
 ;			restore regs, release frame, return
-exitmultnocopy:			
 			MOV				R10, savedR10
 			MOV				RDX, savedRDX
 			MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
@@ -256,9 +257,11 @@ mult_uT64	ENDP
 ;			dividend		-	Address of 8 QWORDS dividend (in R8)
 ;			divisor			-	Address of 8 QWORDs divisor (in R9)
 ;			returns			-	nothing (0)
+
 			OPTION			PROLOGUE:none
 			OPTION			EPILOGUE:none
 div_u		PROC			PUBLIC
+
 			LOCAL			padding1[8]:QWORD
 			LOCAL			qhat[16]:QWORD
 			LOCAL			rhat[8]:QWORD
@@ -271,6 +274,7 @@ div_u		PROC			PUBLIC
 			LOCAL			loopj:WORD					; loop iterator, initially "m"
 			LOCAL			shiftadj:WORD				; divisor adjustment to fit into one word
 			LOCAL			padding2[8]:QWORD
+
 			CreateFrame		240h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
