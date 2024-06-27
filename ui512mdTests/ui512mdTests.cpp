@@ -134,7 +134,7 @@ namespace ui512mdTests
 			alignas ( 64 ) u64 expectedoverflow [ 8 ] { 0 };
 
 			// First test, a simple multiply by two. 
-			// Easy to check as the answer is a shift left, overflow is a shift right
+			// Easy to check as the expected answer is a shift left, expected overflow is a shift right
 			for ( int i = 0; i < runcount; i++ )
 			{
 				//	random initialize mutiplicand
@@ -171,7 +171,8 @@ namespace ui512mdTests
 			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
 
 			// Second test, a simple multiply by a random power of two. 
-			// Still relatively easy to check as answer is a shift left, overflow is a shift right
+			// Still relatively easy to check as the expected answer is a shift left,
+			// expected overflow is a shift right
 			for ( int i = 0; i < runcount; i++ )
 			{
 				for ( int j = 0; j < 8; j++ )
@@ -180,6 +181,7 @@ namespace ui512mdTests
 				};
 
 				set_uT64 ( num2, 1ull );
+
 				u16 nrShift = RandomU64 ( &seed ) % 512;
 				shl_u ( num2, num2, nrShift );
 
@@ -188,6 +190,7 @@ namespace ui512mdTests
 				shr_u ( expectedoverflow, num1, ( 512 - nrShift ) );
 
 				mult_u ( product, overflow, num1, num2 );
+
 				for ( int j = 0; j < 8; j++ )
 				{
 					Assert::AreEqual ( expectedproduct [ j ], product [ j ],
@@ -204,11 +207,12 @@ namespace ui512mdTests
 
 			// Third test, a multiply by sums of random powers of two. 
 			// Building "expected" is a bit more complicated
+
+			const u16 nrBits = 192;				// the generated random number will have nrBits randomly selected and "on"
+			u16 BitsUsed [ nrBits ] = { 0 };	// intialize all to zero
 			for ( int i = 0; i < runcount; i++ )
 			{
-				const u16 nrBits = 128;			// the generated random number will have nrBits randomly selected and "on"
 				u16 bitcnt = 0;
-				u16 BitsUsed [ nrBits ] = { 0 }; // intialize all to zero
 				fill_n ( BitsUsed, nrBits, 0 );
 
 				for ( int j = 0; j < 8; j++ )
@@ -293,8 +297,9 @@ namespace ui512mdTests
 
 		TEST_METHOD ( ui512md_01_mul_timing )
 		{
-			// timing test. Eliminate everything but execution of the subject function
-			// Other than set-up, and messaging complete.
+			// Timing test. Eliminate everything but execution of the subject function
+			// other than set-up, and messaging complete.
+
 			u64 seed = 0;
 			alignas ( 64 ) u64 num1 [ 8 ] { 0 };
 			alignas ( 64 ) u64 num2 [ 8 ] { 0 };
@@ -337,7 +342,8 @@ namespace ui512mdTests
 			u64 expectedoverflow = 0;
 
 			// First test, a simple multiply by two. 
-			// Easy to check as the answer is a shift left, overflow is a shift right
+			// Easy to check as the expected answer is a shift left,
+			// and expected overflow is a shift right
 			for ( int i = 0; i < runcount; i++ )
 			{
 				for ( int j = 0; j < 8; j++ )
@@ -365,9 +371,10 @@ namespace ui512mdTests
 			Logger::WriteMessage ( runmsg1.c_str ( ) );
 			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
 
-			// Second test, a simple multiply by a sequential powers of two. 
-			// Still relatively easy to check as answer is a shift left, overflow is a shift right
-			for ( u16 nrShift = 0; nrShift < 64; nrShift++ )
+			// Second test, a simple multiply by sequential powers of two. 
+			// Still relatively easy to check as expected answer is a shift left,
+			// and expected overflow is a shift right
+			for ( u16 nrShift = 0; nrShift < 64; nrShift++ )	// rather than a random bit, cycle thru all 64 bits 
 			{
 				for ( int i = 0; i < runcount / 64; i++ )
 				{
@@ -387,7 +394,7 @@ namespace ui512mdTests
 						Assert::AreEqual ( expectedproduct [ j ], product [ j ],
 							MSG ( L"Product at " << j << " failed " << nrShift << i ) );
 					}
-					Assert::AreEqual ( expectedoverflow, overflow, MSG ( L"Overflow failed " << nrShift << i ) );
+					Assert::AreEqual ( expectedoverflow, overflow, MSG ( L"Overflow failed " << nrShift << " at " << i ) );
 				};
 			}
 
@@ -398,12 +405,11 @@ namespace ui512mdTests
 
 			// Third test, a multiply by random sums of powers of two. 
 			// Building "expected" is a bit more complicated
+			const u16 nrBits = 24;
+			u16 BitsUsed [ nrBits ] = { 0 };
 			for ( int i = 0; i < runcount; i++ )
 			{
-
-				const u16 nrBits = 16;
 				u16 bitcnt = 0;
-				u16 BitsUsed [ nrBits ] = { 0 }; // intialize all to zero
 				fill_n ( BitsUsed, nrBits, 0 );
 
 				for ( int j = 0; j < 8; j++ )
@@ -412,6 +418,7 @@ namespace ui512mdTests
 					product [ j ] = 0;
 					expectedproduct [ j ] = 0;
 				};
+
 				expectedoverflow = 0;
 				overflow = 0;
 				num2 = 0;
@@ -427,8 +434,8 @@ namespace ui512mdTests
 					zero_u ( intermediateprod );
 					intermediateovrf = 0;
 
-					// Find a bit (0 -> 64) that hasn't already been used in this random number
-					nrShift = RandomU64 ( &seed ) % 63;
+					// Find a bit (0 -> 63) that hasn't already been used in this random number
+					nrShift = RandomU64 ( &seed ) % 64;
 					u16 k = 0;
 					while ( !nubit )
 					{
@@ -442,7 +449,7 @@ namespace ui512mdTests
 						};
 						if ( nrShift == BitsUsed [ j2 ] )
 						{
-							nrShift = RandomU64 ( &seed ) % 63;
+							nrShift = RandomU64 ( &seed ) % 64;
 						}
 						else
 						{
@@ -487,6 +494,9 @@ namespace ui512mdTests
 
 		TEST_METHOD ( ui512md_02_mul64_timing )
 		{
+			// Timing test. Eliminate everything but execution of the subject function
+			// other than set-up, and messaging complete.
+
 			u64 seed = 0;
 			alignas ( 64 ) u64 num1 [ 8 ] { 0 };
 			alignas ( 64 ) u64 product [ 8 ] { 0 };
@@ -564,6 +574,9 @@ namespace ui512mdTests
 
 		TEST_METHOD ( ui512md_03_div_timing )
 		{
+			// Timing test. Eliminate everything but execution of the subject function
+			// other than set-up, and messaging complete.
+
 			u64 seed = 0;
 			alignas ( 64 ) u64 dividend [ 8 ] { 0 };
 			alignas ( 64 ) u64 quotient [ 8 ] { 0 };
@@ -589,11 +602,88 @@ namespace ui512mdTests
 		};
 		TEST_METHOD ( ui512md_04_div64 )
 		{
+			u64 seed = 0;
+			alignas ( 64 ) u64 dividend [ 8 ] { 0 };
+			alignas ( 64 ) u64 quotient [ 8 ] { 0 };
+			alignas ( 64 ) u64 expectedquotient [ 8 ] { 0 };
+			u64 divisor = 0;
+			u64 remainder = 0;
+			u64 expectedremainder = 0;
+
+
+			// First test, a simple divide by two. 
+			// Easy to check as the expected answer is a shift right,
+			// and expected remainder is a shift left
+
+			for ( int i = 0; i < runcount; i++ )
+			{
+				for ( int j = 0; j < 8; j++ )
+				{
+					dividend [ j ] = RandomU64 ( &seed );
+				};
+				zero_u ( quotient );
+
+				divisor = 2;
+				shr_u ( expectedquotient, dividend, u16 ( 1 ) );
+				expectedremainder = ( dividend [ 7 ] << 63 ) >> 63;
+
+				div_uT64 ( quotient, &remainder, dividend, divisor );
+
+				for ( int j = 0; j < 8; j++ )
+				{
+					Assert::AreEqual ( expectedquotient [ j ], quotient [ j ],
+						MSG ( L"Quotient at " << j << " failed " << i ) );
+				};
+
+				Assert::AreEqual ( expectedremainder, remainder, MSG ( L"Remainder failed " << i ) );
+			};
+
+			string runmsg1 = "Divide (u64) function testing. Simple divide by 2 " +
+				to_string ( runcount ) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage ( runmsg1.c_str ( ) );
+			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
+
+
+			// Second test, a simple divide by sequential powers of two. 
+			// Still relatively easy to check as expected answer is a shift right,
+			// and expected remainder is a shift left
+
+			for ( u16 nrShift = 0; nrShift < 64; nrShift++ )	// rather than a random bit, cycle thru all 64 bits 
+			{
+				for ( int i = 0; i < runcount / 64; i++ )
+				{
+					for ( int j = 0; j < 8; j++ )
+					{
+						dividend [ j ] = RandomU64 ( &seed );
+					};
+
+					divisor = 1ull << nrShift;
+					shr_u ( expectedquotient, dividend, nrShift );
+					expectedremainder = ( nrShift == 0 ) ? 0 : ( dividend [ 7 ] << ( 64 - nrShift ) ) >> ( 64 - nrShift );
+
+					div_uT64 ( quotient, &remainder, dividend, divisor );
+
+					for ( int j = 0; j < 8; j++ )
+					{
+						Assert::AreEqual ( expectedquotient [ j ], quotient [ j ],
+							MSG ( L"Quotient at " << j << " failed " << nrShift << i ) );
+					}
+					Assert::AreEqual ( expectedremainder, remainder, MSG ( L"Remainder failed " << nrShift << " at " << i ) );
+				};
+			}
+
+			string runmsg2 = "Divide (u64) function testing. Divide by sequential powers of 2 "
+				+ to_string ( runcount ) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage ( runmsg2.c_str ( ) );
+			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
 
 		};
 
 		TEST_METHOD ( ui512md_04_div64_timing )
 		{
+			// Timing test. Eliminate everything but execution of the subject function
+			// other than set-up, and messaging complete.
+
 			u64 seed = 0;
 			alignas ( 64 ) u64 dividend [ 8 ] { 0 };
 			alignas ( 64 ) u64 quotient [ 8 ] { 0 };
@@ -609,7 +699,7 @@ namespace ui512mdTests
 
 			for ( int i = 0; i < timingcount; i++ )
 			{
-				div_uT64 ( quotient, remainder, dividend, divisor );
+				div_uT64 ( quotient, &remainder, dividend, divisor );
 			};
 
 			string runmsg = "Divide by u64  function timing. Ran "

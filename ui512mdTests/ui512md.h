@@ -35,7 +35,7 @@ extern "C"
 	//	EXTERNDEF	div_uT64 : PROC
 	//	div_uT64	divide 512 bit dividend by 64 bit divisor, giving 512 bit quotient and 64 bit remainder
 	//	Prototype:	void div_uT64 ( u64 * quotient, u64 * remainder, u64 * dividend, u64 divisor );
-	void div_uT64 ( u64*, u64, u64*, u64 );
+	void div_uT64 ( u64*, u64*, u64*, u64 );
 }
 
 #endif

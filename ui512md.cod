@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/25/24 00:08:28
+Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/27/24 14:16:26
 ui512md.asm						     Page 1 - 1
 
 
@@ -940,80 +940,54 @@ ui512md.asm						     Page 1 - 1
 							OPTION			PROLOGUE:none
 							OPTION			EPILOGUE:none
  00000521			div_uT64	PROC			PUBLIC
-							LOCAL			padding1[8]:QWORD
-							LOCAL			quotient[16]:QWORD
-							LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
-							LOCAL			padding2[8]:QWORD
-							CreateFrame		200h, savedRBP
- 00000521  55		     1				PUSH			RBP
- 00000522  48/ 8B EC	     1				MOV				RBP, RSP
- 00000525  48/ 81 C4	     1				ADD				RSP, -((200h / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
-	   FFFFFDC0
- 0000052C  48/ C7 C0	     1				MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
-	   FFFFFFC0
- 00000533  48/ 23 E0	     1				AND				RSP, RAX
- 00000536  48/ 23 C5	     1				AND				RAX, RBP					; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
- 00000539  48/ 95	     1				XCHG			RAX, RBP					; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
- 0000053B  48/ 89 85	     1				MOV				savedRBP, RAX			; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
-	   FFFFFF28
- 00000542  48/ 89 8D					MOV				savedRCX, RCX
-	   FFFFFF38
- 00000549  48/ 89 95					MOV				savedRDX, RDX
-	   FFFFFF30
- 00000550  4C/ 89 85					MOV				savedR8, R8
-	   FFFFFF20
- 00000557  4C/ 89 8D					MOV				savedR9, R9
-	   FFFFFF18
- 0000055E  4C/ 89 95					MOV				savedR10, R10
-	   FFFFFF10
- 00000565  4C/ 89 9D					MOV				savedR11, R11
-	   FFFFFF08
- 0000056C  4C/ 89 A5					MOV				savedR12, R12
-	   FFFFFF00
-							;
- 00000573  48/ 8D 8D					LEA				RCX, quotient
-	   FFFFFF40
-							Zero512			RCX
- 0000057A  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
-	   FF
- 00000580  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
-	   39
- 00000586  48/ 8D 4D 80					LEA				RCX, quotient [ 8 * 8]
-							Zero512			RCX
- 0000058A  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
-	   FF
- 00000590  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
-	   39
 
+ 00000521  4D/ 85 C9					TEST			R9, R9
+ 00000524  74 63					JZ				DivByZero
 							;
- 00000596  4C/ 8B A5					MOV				R12, savedR12
-	   FFFFFF00
- 0000059D  4C/ 8B 9D					MOV				R11, savedR11
-	   FFFFFF08
- 000005A4  4C/ 8B 95					MOV				R10, savedR10
-	   FFFFFF10
- 000005AB  4C/ 8B 8D					MOV				R9,  savedR9
-	   FFFFFF18
- 000005B2  4C/ 8B 85					MOV				R8,  savedR8
-	   FFFFFF20
- 000005B9  48/ 8B 95					MOV				RDX, savedRDX
-	   FFFFFF30
- 000005C0  48/ 8B 8D					MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
-	   FFFFFF38
-							ReleaseFrame	savedRBP
- 000005C7  48/ 8B AD	     1				MOV				RBP, savedRBP
-	   FFFFFF28
- 000005CE  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
- 000005CF  48/ 33 C0					XOR				RAX, RAX					; return zero
-							RET
- 000005D2  C3		   *	    ret    00000h
- 000005D3  48/ 8D 45 C0					LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
- 000005D7  48/ 8D 85					LEA				RAX, padding2
-	   FFFFFEC0
- 000005DE			div_uT64	ENDP
+ 00000526  4C/ 8B D2					MOV				R10, RDX
+ 00000529  48/ 33 D2					XOR				RDX, RDX
+ 0000052C  49/ 8B 00					MOV				RAX, Q_PTR [ R8 + 0 * 8]		; Dividend first word
+ 0000052F  49/ F7 F1					DIV				R9								; Divisor
+ 00000532  48/ 89 01					MOV				Q_PTR [ RCX + 0 * 8 ], RAX		; Quitient to callers quotient first word; Div moved remainder to RDX
+ 00000535  49/ 8B 40 08					MOV				RAX, Q_PTR [ R8 + 1 * 8 ]		; 2nd
+ 00000539  49/ F7 F1					DIV				R9
+ 0000053C  48/ 89 41 08					MOV				Q_PTR [ RCX + 1 * 8 ], RAX
+ 00000540  49/ 8B 40 10					MOV				RAX, Q_PTR [ R8 + 2 * 8 ]		; 3rd
+ 00000544  49/ F7 F1					DIV				R9
+ 00000547  48/ 89 41 10					MOV				Q_PTR [ RCX + 2 * 8 ], RAX
+ 0000054B  49/ 8B 40 18					MOV				RAX, Q_PTR [ R8 + 3 * 8 ]		; 4th
+ 0000054F  49/ F7 F1					DIV				R9
+ 00000552  48/ 89 41 18					MOV				Q_PTR [ RCX + 3 * 8 ], RAX
+ 00000556  49/ 8B 40 20					MOV				RAX, Q_PTR [ R8 + 4 * 8 ]		; 5th
+ 0000055A  49/ F7 F1					DIV				R9
+ 0000055D  48/ 89 41 20					MOV				Q_PTR [ RCX + 4 * 8 ], RAX
+ 00000561  49/ 8B 40 28					MOV				RAX, Q_PTR [ R8 + 5 * 8 ]		; 6th
+ 00000565  49/ F7 F1					DIV				R9
+ 00000568  48/ 89 41 28					MOV				Q_PTR [ RCX + 5 * 8 ], RAX
+ 0000056C  49/ 8B 40 30					MOV				RAX, Q_PTR [ R8 + 6 * 8 ]		; 7th
+ 00000570  49/ F7 F1					DIV				R9
+ 00000573  48/ 89 41 30					MOV				Q_PTR [ RCX + 6 * 8 ], RAX		; 8th and final
+ 00000577  49/ 8B 40 38					MOV				RAX, Q_PTR [ R8 + 7 * 8 ]
+ 0000057B  49/ F7 F1					DIV				R9
+ 0000057E  48/ 89 41 38					MOV				Q_PTR [ RCX + 7 * 8 ], RAX
+ 00000582  49/ 89 12					MOV				Q_PTR [ R10 ] , RDX				; remainder to callers remainder
+ 00000585			Exit:
+ 00000585  48/ 33 C0					XOR				RAX, RAX					; return zero
+ 00000588  C3						RET
+				;
+ 00000589			DivByZero:
+							Zero512			RCX						; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
+ 00000589  62 01 85 40/ EF   1				VPXORQ			ZMM31, ZMM31, ZMM31
+	   FF
+ 0000058F  62 61 FD 48/ 7F   1				VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+	   39
+ 00000595  48/ 33 C0					XOR				RAX, RAX
+ 00000598  49/ 89 02					MOV				Q_PTR [ R10 ] , RAX		;	(not possible on legit divide)
+ 0000059B  EB E8					JMP				Exit
+ 0000059D			div_uT64	ENDP
 
 							END
-Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/25/24 00:08:28
+Microsoft (R) Macro Assembler (x64) Version 14.40.33811.0   06/27/24 14:16:26
 ui512md.asm						     Symbols 2 - 1
 
 
@@ -1033,18 +1007,9 @@ Procedures, parameters, and locals:
 
                 N a m e                 Type     Value    Attr
 
-div_uT64 . . . . . . . . . . . .	P 	 00000521 _TEXT	Length= 000000BD Public
-  padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
-  quotient . . . . . . . . . . .	QWord	 rbp - 000000C0
-  savedRCX . . . . . . . . . . .	QWord	 rbp - 000000C8
-  savedRDX . . . . . . . . . . .	QWord	 rbp - 000000D0
-  savedRBP . . . . . . . . . . .	QWord	 rbp - 000000D8
-  savedR8  . . . . . . . . . . .	QWord	 rbp - 000000E0
-  savedR9  . . . . . . . . . . .	QWord	 rbp - 000000E8
-  savedR10 . . . . . . . . . . .	QWord	 rbp - 000000F0
-  savedR11 . . . . . . . . . . .	QWord	 rbp - 000000F8
-  savedR12 . . . . . . . . . . .	QWord	 rbp - 00000100
-  padding2 . . . . . . . . . . .	QWord	 rbp - 00000140
+div_uT64 . . . . . . . . . . . .	P 	 00000521 _TEXT	Length= 0000007C Public
+  Exit . . . . . . . . . . . . .	L 	 00000585 _TEXT	
+  DivByZero  . . . . . . . . . .	L 	 00000589 _TEXT	
 div_u  . . . . . . . . . . . . .	P 	 000002F9 _TEXT	Length= 00000228 Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   qhat . . . . . . . . . . . . .	QWord	 rbp - 000000C0

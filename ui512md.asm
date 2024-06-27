@@ -426,37 +426,46 @@ div_u		ENDP
 			OPTION			PROLOGUE:none
 			OPTION			EPILOGUE:none
 div_uT64	PROC			PUBLIC
-			LOCAL			padding1[8]:QWORD
-			LOCAL			quotient[16]:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
-			LOCAL			padding2[8]:QWORD
-			CreateFrame		200h, savedRBP
-			MOV				savedRCX, RCX
-			MOV				savedRDX, RDX
-			MOV				savedR8, R8
-			MOV				savedR9, R9
-			MOV				savedR10, R10
-			MOV				savedR11, R11
-			MOV				savedR12, R12
-			;
-			LEA				RCX, quotient
-			Zero512			RCX
-			LEA				RCX, quotient [ 8 * 8]
-			Zero512			RCX
 
+			TEST			R9, R9
+			JZ				DivByZero
 			;
-			MOV				R12, savedR12
-			MOV				R11, savedR11
-			MOV				R10, savedR10
-			MOV				R9,  savedR9
-			MOV				R8,  savedR8
-			MOV				RDX, savedRDX
-			MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
-			ReleaseFrame	savedRBP
-			XOR				RAX, RAX					; return zero
+			MOV				R10, RDX
+			XOR				RDX, RDX
+			MOV				RAX, Q_PTR [ R8 + 0 * 8]		; Dividend first word
+			DIV				R9								; Divisor
+			MOV				Q_PTR [ RCX + 0 * 8 ], RAX		; Quotient to callers quotient first word; Div moved remainder to RDX
+			MOV				RAX, Q_PTR [ R8 + 1 * 8 ]		; 2nd
+			DIV				R9
+			MOV				Q_PTR [ RCX + 1 * 8 ], RAX
+			MOV				RAX, Q_PTR [ R8 + 2 * 8 ]		; 3rd
+			DIV				R9
+			MOV				Q_PTR [ RCX + 2 * 8 ], RAX
+			MOV				RAX, Q_PTR [ R8 + 3 * 8 ]		; 4th
+			DIV				R9
+			MOV				Q_PTR [ RCX + 3 * 8 ], RAX
+			MOV				RAX, Q_PTR [ R8 + 4 * 8 ]		; 5th
+			DIV				R9
+			MOV				Q_PTR [ RCX + 4 * 8 ], RAX
+			MOV				RAX, Q_PTR [ R8 + 5 * 8 ]		; 6th
+			DIV				R9
+			MOV				Q_PTR [ RCX + 5 * 8 ], RAX
+			MOV				RAX, Q_PTR [ R8 + 6 * 8 ]		; 7th
+			DIV				R9
+			MOV				Q_PTR [ RCX + 6 * 8 ], RAX		; 8th and final
+			MOV				RAX, Q_PTR [ R8 + 7 * 8 ]
+			DIV				R9
+			MOV				Q_PTR [ RCX + 7 * 8 ], RAX
+			MOV				Q_PTR [ R10 ] , RDX				; remainder to callers remainder
+Exit:
+			XOR				RAX, RAX						; return zero
 			RET
-			LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
-			LEA				RAX, padding2
+;
+DivByZero:
+			Zero512			RCX								; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
+			XOR				RAX, RAX
+			MOV				Q_PTR [ R10 ] , RAX				;	(not possible on legit divide)
+			JMP				Exit
 div_uT64	ENDP
 
 			END
