@@ -99,7 +99,7 @@ CreateFrame	MACRO			argsize, argsavename
 ;
 			PUSH			RBP
 			MOV				RBP, RSP
-			ADD				RSP, -((argsize / 8) * ( 8 + 1)); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
+			ADD				RSP, -(( argsize / 8 ) * ( 8 + 1 )); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
 			MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
 			AND				RSP, RAX
 			AND				RAX, RBP					; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call

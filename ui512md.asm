@@ -120,9 +120,9 @@ copyandexit:
 			Copy512			RCX, RDX
 			JMP				exitmultnocopy				; and exit
 mult:
-			LEA				RCX, product[0]
+			LEA				RCX, product [ 0 ]
 			Zero512			RCX							; clear working copy of overflow
-			LEA				RCX, product[8*8]
+			LEA				RCX, product[ 8 * 8 ]
 			Zero512			RCX							; clear working copy of product (they need to be contiguous, so using working copy, not callers)
 			;
 			MOV				R11, savedR9				; address of callers multiplier
@@ -142,13 +142,13 @@ multloop:
 			ADD				R10, R9
 			INC				R10							; R10 : index for product/overflow
 			;
-			MOV				RAX, [R12] + [R9 * 8]
-			MUL				Q_PTR [R11] + [R8 * 8]
-			ADD				product[R10 * 8], RAX
+			MOV				RAX, [ R12 ] + [ R9 * 8 ]
+			MUL				Q_PTR [ R11 ] + [ R8 * 8 ]
+			ADD				product [ R10 * 8 ], RAX
 			;
 			DEC				R10							; preserves carry flag
 addcarryloop:
-			ADC				product[R10 * 8], RDX
+			ADC				product [ R10 * 8 ], RDX
 			MOV				RDX, 0						; again, preserves carry flag
 			JNC				nextcand
 			DEC				R10
@@ -163,10 +163,10 @@ nextcand:
 			JGE				multloop
 ;			copy working product/overflow to callers product / overflow
 			MOV				RCX, savedRCX
-			LEA				RDX, product[8 * 8]
+			LEA				RDX, product [ 8 * 8 ]
 			Copy512			RCX, RDX					; copy working product to callers product
 			MOV				RCX, savedRDX
-			LEA				RDX, product[0]
+			LEA				RDX, product [ 0 ]
 			Copy512			RCX, RDX					; copy working overflow to callers overflow
 ;			restore regs, release frame, return
 exitmultnocopy:			
@@ -198,52 +198,76 @@ mult_u		ENDP
 			OPTION			EPILOGUE:none
 mult_uT64	PROC			PUBLIC
 
-			LOCAL			padding1[8]:QWORD
-			LOCAL			product[16]:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR10:QWORD
-			LOCAL			padding2[8]:QWORD
+			LOCAL			padding1 [ 8 ] :QWORD
+			LOCAL			product [ 8 ] :QWORD
+			LOCAL			overflow :QWORD
+			LOCAL			savedRCX :QWORD, savedRDX :QWORD, savedRBP :QWORD
+			LOCAL			padding2 [ 8 ] :QWORD
 
-			CreateFrame		240h, savedRBP
+			CreateFrame		160h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
-			MOV				savedR10, R10
 
 			LEA				RCX, product
-			Zero512			RCX							; clear working copy of product and overflow
+			Zero512			RCX								; clear working copy of product and overflow
 			XOR				RAX, RAX
-			MOV				product [ 8 * 8 ], RAX
-
-;			multiply loop
-			MOV				R10, 7						; loop counter
-multloop:
-			MOV				RAX, [ R8 ] + [ R10 * 8 ]	; R8 holds addr of multiplicand
-			MUL				R9							; R9 value of multiplier
-			ADD				product[ R10 * 8 + 8], RAX
-			ADC				product[R10 * 8], RDX
-			DEC				R10
-			JGE				multloop
-
-;			copy working product / overflow to callers product / overflow
-			MOV				R10, 7
-			MOV				RCX, savedRCX				; address of callers product area
-			LEA				RDX, product[1 * 8]			; this is not 64 byte aligned, can not use copy_u
-copyloop:
-			MOV				RAX, Q_PTR [ RDX ] + [ R10 * 8 ]
-			MOV				Q_PTR [ RCX ] + [ R10 * 8 ], RAX
-			DEC				R10
-			JGE				copyloop
-			MOV				RAX, product [ 0 ]
+			MOV				overflow, RAX
+			;
+			MOV				RAX, [ R8 ] + [ 7 * 8 ]			; multiplicand 8th qword
+			MUL				R9								; times multiplier
+			ADD				product [ 7 * 8], RAX			; to working product 8th word (don't need add as no previous overflow)')
+			ADC				product [ 6 * 8 ], RDX			; 'overflow' to 7th qword of working product
+			;
+			MOV				RAX, [ R8 ] + [ 6 * 8 ]
+			MUL				R9
+			ADD				product [ 6 * 8 ], RAX
+			ADC				product [ 5 * 8 ], RDX
+			;
+			MOV				RAX, [ R8 ] + [ 5 * 8 ]
+			MUL				R9
+			ADD				product [ 5 * 8], RAX
+			ADC				product [ 4 * 8 ], RDX
+			;
+			MOV				RAX, [ R8 ] + [ 4 * 8 ]
+			MUL				R9
+			ADD				product [ 4 * 8], RAX
+			ADC				product [ 3 * 8 ], RDX
+			;
+			MOV				RAX, [ R8 ] + [ 3 * 8 ]
+			MUL				R9
+			ADD				product [ 3 * 8], RAX
+			ADC				product [ 2 * 8 ], RDX
+			;
+			MOV				RAX, [ R8 ] + [ 2 * 8 ]
+			MUL				R9
+			ADD				product [ 2 * 8], RAX
+			ADC				product [ 1 * 8 ], RDX
+			;
+			MOV				RAX, [ R8 ] + [ 1 * 8 ]
+			MUL				R9
+			ADD				product [ 1 * 8], RAX
+			ADC				product [ 0 * 8 ], RDX
+			;
+			MOV				RAX, [ R8 ] + [ 0 * 8 ]
+			MUL				R9
+			ADD				product [ 0 * 8], RAX
+			;
+			ADC				overflow, RDX					; last overflow is really overflow
+			;
+			MOV				RCX, savedRCX
+			LEA				RDX, product
+			Copy512			RCX, RDX
+			MOV				RAX, overflow
 			MOV				RDX, savedRDX
-			MOV				Q_PTR [ RDX ], RAX			
-
+			MOV				Q_PTR [ RDX ], RAX
 ;			restore regs, release frame, return
-			MOV				R10, savedR10
 			MOV				RDX, savedRDX
-			MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
+			MOV				RCX, savedRCX					; restore parameter registers back to "as-called" values
 			ReleaseFrame	savedRBP
-			XOR				RAX, RAX					; return zero
+			XOR				RAX, RAX						; return zero
 			RET
-			LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
+
+			LEA				RAX, padding1					; reference local variables meant for padding to remove unreferenced variable warning from assembler
 			LEA				RAX, padding2
 
 mult_uT64	ENDP
