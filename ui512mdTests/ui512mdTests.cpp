@@ -554,10 +554,6 @@ namespace ui512mdTests
 							qresult = ( qidx >= 0 ) ? qresult = ( v >= ( 7 - m ) ) ? num1 [ qidx ] : 0ull : qresult = 0;
 							rresult = ( v > m ) ? num1 [ v ] : 0ull;
 
-							//if ( quotient [ v ] != qresult )
-							//{
-							//	break;
-							//};
 							Assert::AreEqual ( quotient [ v ], qresult, L"Quotient incorrect" );
 							Assert::AreEqual ( remainder [ v ], rresult, L" Remainder incorrect" );
 						};
@@ -677,6 +673,96 @@ namespace ui512mdTests
 			Logger::WriteMessage ( runmsg2.c_str ( ) );
 			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
 
+			// Third test, a divide by random sums of powers of two. 
+			// Building "expected" is a bit more complicated
+
+			alignas ( 64 )  u64 intermediatediv [ 8 ] { 0 };
+			u64 intermediaterem = 0;
+			const u16 nrBits = 24;
+			u16 BitsUsed [ nrBits ] = { 0 };
+			for ( int i = 0; i < runcount; i++ )
+			{
+				u16 bitcnt = 0;
+				fill_n ( BitsUsed, nrBits, 0 );
+
+				for ( int j = 0; j < 8; j++ )
+				{
+					dividend [ j ] = RandomU64 ( &seed );
+					quotient [ j ] = 0;
+					expectedquotient [ j ] = 0;
+				};
+
+				expectedremainder = 0;
+				remainder = 0;
+				u64 num2 = 0;
+				u64 num3 = 0;
+
+				// build divisor as 'N' number of random bits (avoid duplicate bits)
+				// simultaneously build expected result
+
+				u16 nrShift = 0;
+				for ( int j = 0; j < nrBits; j++ )
+				{
+					bool nubit = false;
+					zero_u ( intermediatediv );
+					intermediaterem = 0;
+
+					// Find a bit (0 -> 63) that hasn't already been used in this random number
+					nrShift = RandomU64 ( &seed ) % 64;
+					u16 k = 0;
+					while ( !nubit )
+					{
+						u16 j2 = 0;
+						for ( ; j2 < bitcnt; j2++ )
+						{
+							if ( nrShift == BitsUsed [ j2 ] )
+							{
+								break;
+							}
+						};
+						if ( nrShift == BitsUsed [ j2 ] )
+						{
+							nrShift = RandomU64 ( &seed ) % 64;
+						}
+						else
+						{
+							nubit = true;
+							BitsUsed [ bitcnt++ ] = nrShift;
+						};
+					};
+
+					// use selected bit to build a random number (through shift/add)
+					// then build / project expected result of divide (also through shift / add)
+
+					// Divisor:
+					num3 = 1ull << nrShift;
+					num2 += num3;
+
+					// Expected:
+					shl_u ( intermediatediv, dividend, nrShift );
+					s32 carry = add_u ( expectedquotient, expectedquotient, intermediatediv );
+					intermediaterem = ( nrShift == 0 ) ? 0 : dividend [ 0 ] >> ( 64 - nrShift );
+					expectedremainder += intermediaterem;
+					if ( carry != 0 )
+					{
+						expectedremainder++;
+					};
+				};
+
+				div_uT64 ( quotient, &remainder, dividend, divisor );
+
+				for ( int j = 0; j < 8; j++ )
+				{
+					Assert::AreEqual ( expectedquotient [ j ], quotient [ j ],
+						MSG ( L"Product at " << j << " failed " << i << " num2: " << num2 ) );
+				}
+				Assert::AreEqual ( expectedremainder, remainder, MSG ( L"Overflow failed " << i ) );
+			};
+
+			string runmsg3 = "Divide (u64) function testing. Divide by random number "
+				+ to_string ( runcount ) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage ( runmsg3.c_str ( ) );
+			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
 		};
 
 		TEST_METHOD ( ui512md_04_div64_timing )

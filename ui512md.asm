@@ -72,9 +72,8 @@ mult_u		PROC			PUBLIC
 
 			LOCAL			padding1[8]:QWORD
 			LOCAL			product[16]:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD
-			LOCAL			savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
-			LOCAL			plierWC:WORD, candWC:WORD
+			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR12:QWORD
+			LOCAL			plierll:WORD, candll:WORD
 			LOCAL			padding2[8]:QWORD
 
 			CreateFrame		240h, savedRBP
@@ -82,8 +81,6 @@ mult_u		PROC			PUBLIC
 			MOV				savedRDX, RDX
 			MOV				savedR8, R8
 			MOV				savedR9, R9
-			MOV				savedR10, R10
-			MOV				savedR11, R11
 			MOV				savedR12, R12
 			;
 			MOV				RCX, R8						; examine multiplicand
@@ -94,7 +91,9 @@ mult_u		PROC			PUBLIC
 			MOV				RDX, R9						; address of multiplier (to be copied to product)
 			JE				copyandexit
 			SHR				AX, 6
-			MOV				candWC, AX					; save off word count for multiplicand
+			MOV				RCX, 7
+			SUB				CX, AX
+			MOV				candll, CX					; save off multiplicand index lower limit (eliminate multiplying leading zeros)
 			;
 			MOV				RCX, R9						; examine multiplier
 			CALL			msb_u
@@ -104,9 +103,52 @@ mult_u		PROC			PUBLIC
 			MOV				RDX, R8						; address of multiplicand (to be copied to product)
 			JE				copyandexit
 			SHR				AX, 6
-			MOV				plierWC, AX					; save off word count for multiplier
-			JMP				mult
+			MOV				RCX, 7
+			SUB				CX, AX
+			MOV				plierll, CX					; save off multiplier index lower limit (eliminate multiplying leading zeros)
 			;
+			LEA				RCX, product [ 0 ]
+			Zero512			RCX							; clear working copy of overflow
+			LEA				RCX, product[ 8 * 8 ]
+			Zero512			RCX							; clear working copy of product (they need to be contiguous, so using working copy, not callers)
+			;
+			MOV				R11, 7						; index for multiplier
+			MOV				R12, 7						; index for multiplicand
+multloop:
+			MOV				R10, R11
+			ADD				R10, R12
+			INC				R10							; index for product/overflow 
+			MOV				RAX, [ R8 ] + [ R12 * 8 ]	; get qword of multiplicand
+			MUL				Q_PTR [ R9 ] + [ R11 * 8 ]	; multiply by qword of multiplier
+			ADD				product [ R10 * 8 ], RAX
+			DEC				R10							; preserves carry flag
+propagatecarry:
+			ADC				product [ R10 * 8 ], RDX
+			MOV				RDX, 0						; again, preserves carry flag
+			JNC				nextcand
+			DEC				R10
+			JGE				propagatecarry
+nextcand:
+			DEC				R12
+			CMP				R12W, candll
+			JGE				multloop
+			MOV				R12, 7
+			DEC				R11
+			CMP				R11W, plierll
+			JGE				multloop
+;			copy working product/overflow to callers product / overflow
+			MOV				RCX, savedRCX
+			LEA				RDX, product [ 8 * 8 ]
+			Copy512			RCX, RDX					; copy working product to callers product
+			MOV				RCX, savedRDX
+			LEA				RDX, product [ 0 ]
+			Copy512			RCX, RDX					; copy working overflow to callers overflow
+;			restore regs, release frame, return
+exitmultnocopy:			
+			MOV				R12, savedR12
+			ReleaseFrame	savedRBP
+			XOR				RAX, RAX					; return zero
+			RET
 zeroandexit:
 			MOV				RCX, savedRCX
 			Zero512			RCX
@@ -119,67 +161,6 @@ copyandexit:
 			MOV				RCX, savedRCX				; copy (whichever: multiplier or multiplicand) to callers product
 			Copy512			RCX, RDX
 			JMP				exitmultnocopy				; and exit
-mult:
-			LEA				RCX, product [ 0 ]
-			Zero512			RCX							; clear working copy of overflow
-			LEA				RCX, product[ 8 * 8 ]
-			Zero512			RCX							; clear working copy of product (they need to be contiguous, so using working copy, not callers)
-			;
-			MOV				R11, savedR9				; address of callers multiplier
-			MOV				R8, 7
-			SUB				R8W, plierWC				 
-			MOV				plierWC, R8W
-			MOV				R8, 7						; R8 : index for multiplier, plierWC : low limit for index
-			;
-			MOV				R12, savedR8				; address of callers multiplicand
-			MOV				R9, 7
-			SUB				R9W, candWC
-			MOV				candWC, R9W
-			MOV				R9, 7						; R9 : index for multiplicand; candWC : low limit for index
-			;
-multloop:
-			MOV				R10, R8
-			ADD				R10, R9
-			INC				R10							; R10 : index for product/overflow
-			;
-			MOV				RAX, [ R12 ] + [ R9 * 8 ]
-			MUL				Q_PTR [ R11 ] + [ R8 * 8 ]
-			ADD				product [ R10 * 8 ], RAX
-			;
-			DEC				R10							; preserves carry flag
-addcarryloop:
-			ADC				product [ R10 * 8 ], RDX
-			MOV				RDX, 0						; again, preserves carry flag
-			JNC				nextcand
-			DEC				R10
-			JGE				addcarryloop
-nextcand:
-			DEC				R9
-			CMP				R9W, candWC
-			JGE				multloop
-			MOV				R9, 7
-			DEC				R8
-			CMP				R8W, plierWC
-			JGE				multloop
-;			copy working product/overflow to callers product / overflow
-			MOV				RCX, savedRCX
-			LEA				RDX, product [ 8 * 8 ]
-			Copy512			RCX, RDX					; copy working product to callers product
-			MOV				RCX, savedRDX
-			LEA				RDX, product [ 0 ]
-			Copy512			RCX, RDX					; copy working overflow to callers overflow
-;			restore regs, release frame, return
-exitmultnocopy:			
-			MOV				R12, savedR12
-			MOV				R11, savedR11
-			MOV				R10, savedR10
-			MOV				R9, savedR9
-			MOV				R8, savedR8
-			MOV				RDX, savedRDX
-			MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
-			ReleaseFrame	savedRBP
-			XOR				RAX, RAX					; return zero
-			RET
 			LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
 			LEA				RAX, padding2
 mult_u		ENDP
@@ -215,54 +196,44 @@ mult_uT64	PROC			PUBLIC
 			;
 			MOV				RAX, [ R8 ] + [ 7 * 8 ]			; multiplicand 8th qword
 			MUL				R9								; times multiplier
-			ADD				product [ 7 * 8], RAX			; to working product 8th word (don't need add as no previous overflow)')
+			ADD				product [ 7 * 8 ], RAX			; to working product 8th word
 			ADC				product [ 6 * 8 ], RDX			; 'overflow' to 7th qword of working product
-			;
-			MOV				RAX, [ R8 ] + [ 6 * 8 ]
+			MOV				RAX, [ R8 ] + [ 6 * 8 ]			; 7th
 			MUL				R9
-			ADD				product [ 6 * 8 ], RAX
+			ADD				product [ 6 * 8 ], RAX			
 			ADC				product [ 5 * 8 ], RDX
-			;
-			MOV				RAX, [ R8 ] + [ 5 * 8 ]
+			MOV				RAX, [ R8 ] + [ 5 * 8 ]			; 6th
 			MUL				R9
-			ADD				product [ 5 * 8], RAX
+			ADD				product [ 5 * 8 ], RAX			
 			ADC				product [ 4 * 8 ], RDX
-			;
-			MOV				RAX, [ R8 ] + [ 4 * 8 ]
+			MOV				RAX, [ R8 ] + [ 4 * 8 ]			; 5th
 			MUL				R9
-			ADD				product [ 4 * 8], RAX
+			ADD				product [ 4 * 8 ], RAX			
 			ADC				product [ 3 * 8 ], RDX
-			;
-			MOV				RAX, [ R8 ] + [ 3 * 8 ]
+			MOV				RAX, [ R8 ] + [ 3 * 8 ]			; 4th
 			MUL				R9
-			ADD				product [ 3 * 8], RAX
+			ADD				product [ 3 * 8 ], RAX			
 			ADC				product [ 2 * 8 ], RDX
-			;
-			MOV				RAX, [ R8 ] + [ 2 * 8 ]
+			MOV				RAX, [ R8 ] + [ 2 * 8 ]			; 3rd
 			MUL				R9
-			ADD				product [ 2 * 8], RAX
+			ADD				product [ 2 * 8 ], RAX			
 			ADC				product [ 1 * 8 ], RDX
-			;
-			MOV				RAX, [ R8 ] + [ 1 * 8 ]
+			MOV				RAX, [ R8 ] + [ 1 * 8 ]			; 2nd
 			MUL				R9
-			ADD				product [ 1 * 8], RAX
+			ADD				product [ 1 * 8 ], RAX			
 			ADC				product [ 0 * 8 ], RDX
-			;
-			MOV				RAX, [ R8 ] + [ 0 * 8 ]
+			MOV				RAX, [ R8 ] + [ 0 * 8 ]			; 1st
 			MUL				R9
-			ADD				product [ 0 * 8], RAX
+			ADD				product [ 0 * 8 ], RAX
+			ADC				overflow, RDX					; last qword overflow is also the operation overflow
 			;
-			ADC				overflow, RDX					; last overflow is really overflow
-			;
-			MOV				RCX, savedRCX
+			MOV				RCX, savedRCX					; send results back to caller
 			LEA				RDX, product
 			Copy512			RCX, RDX
 			MOV				RAX, overflow
 			MOV				RDX, savedRDX
 			MOV				Q_PTR [ RDX ], RAX
-;			restore regs, release frame, return
-			MOV				RDX, savedRDX
-			MOV				RCX, savedRCX					; restore parameter registers back to "as-called" values
+;			release frame, return
 			ReleaseFrame	savedRBP
 			XOR				RAX, RAX						; return zero
 			RET
@@ -310,7 +281,7 @@ div_u		PROC			PUBLIC
 			;
 			LEA				RCX, quotient
 			Zero512			RCX
-			LEA				RCX, quotient [ 8 * 8]
+			LEA				RCX, quotient [ 8 * 8 ]
 			Zero512			RCX
 			LEA				RCX, qhat
 			Zero512			RCX
@@ -456,7 +427,7 @@ div_uT64	PROC			PUBLIC
 			;
 			MOV				R10, RDX
 			XOR				RDX, RDX
-			MOV				RAX, Q_PTR [ R8 + 0 * 8]		; Dividend first word
+			MOV				RAX, Q_PTR [ R8 + 0 * 8 ]		; Dividend first word
 			DIV				R9								; Divisor
 			MOV				Q_PTR [ RCX + 0 * 8 ], RAX		; Quotient to callers quotient first word; Div moved remainder to RDX
 			MOV				RAX, Q_PTR [ R8 + 1 * 8 ]		; 2nd
@@ -480,7 +451,7 @@ div_uT64	PROC			PUBLIC
 			MOV				RAX, Q_PTR [ R8 + 7 * 8 ]
 			DIV				R9
 			MOV				Q_PTR [ RCX + 7 * 8 ], RAX
-			MOV				Q_PTR [ R10 ] , RDX				; remainder to callers remainder
+			MOV				Q_PTR [ R10 ], RDX				; remainder to callers remainder
 Exit:
 			XOR				RAX, RAX						; return zero
 			RET
