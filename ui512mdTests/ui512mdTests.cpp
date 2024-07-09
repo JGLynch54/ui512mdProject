@@ -673,6 +673,7 @@ namespace ui512mdTests
 			Logger::WriteMessage ( runmsg2.c_str ( ) );
 			Logger::WriteMessage ( L"Passed. Tested expected values via assert.\n\n" );
 
+
 			// Third test, a divide by random sums of powers of two. 
 			// Building "expected" is a bit more complicated
 

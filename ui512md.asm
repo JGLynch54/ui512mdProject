@@ -56,7 +56,7 @@
 
 			OPTION			casemap:none
 .CODE
-;			EXTERNDEF		mult_u:PROC					;	void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
+;			EXTERNDEF		mult_u:PROC					; void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
 
 ;			mult_u			-	multiply 512 multiplicand by 512 multiplier, giving 512 product, overflow
 ;			Prototype:		-	void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
@@ -72,15 +72,15 @@ mult_u		PROC			PUBLIC
 
 			LOCAL			padding1[8]:QWORD
 			LOCAL			product[16]:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR12:QWORD
+			LOCAL			savedRBP:QWORD
+			LOCAL			savedRCX:QWORD, savedRDX:QWORD
+			LOCAL			savedR12:QWORD
 			LOCAL			plierll:WORD, candll:WORD
 			LOCAL			padding2[8]:QWORD
 
 			CreateFrame		240h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
-			MOV				savedR8, R8
-			MOV				savedR9, R9
 			MOV				savedR12, R12
 			;
 			MOV				RCX, R8						; examine multiplicand
@@ -93,7 +93,7 @@ mult_u		PROC			PUBLIC
 			SHR				AX, 6
 			MOV				RCX, 7
 			SUB				CX, AX
-			MOV				candll, CX					; save off multiplicand index lower limit (eliminate multiplying leading zeros)
+			MOV				candll, CX					; save off multiplicand index lower limit (eliminate multiplying leading zero words)
 			;
 			MOV				RCX, R9						; examine multiplier
 			CALL			msb_u
@@ -105,10 +105,10 @@ mult_u		PROC			PUBLIC
 			SHR				AX, 6
 			MOV				RCX, 7
 			SUB				CX, AX
-			MOV				plierll, CX					; save off multiplier index lower limit (eliminate multiplying leading zeros)
+			MOV				plierll, CX					; save off multiplier index lower limit (eliminate multiplying leading zero words)
 			;
 			LEA				RCX, product [ 0 ]
-			Zero512			RCX							; clear working copy of overflow
+			Zero512			RCX							; clear working copy of overflow, need to start as zero, results are added in
 			LEA				RCX, product[ 8 * 8 ]
 			Zero512			RCX							; clear working copy of product (they need to be contiguous, so using working copy, not callers)
 			;
@@ -144,8 +144,8 @@ nextcand:
 			LEA				RDX, product [ 0 ]
 			Copy512			RCX, RDX					; copy working overflow to callers overflow
 ;			restore regs, release frame, return
-exitmultnocopy:			
-			MOV				R12, savedR12
+exit:			
+			MOV				R12, savedR12				; restore any non-volitile regs used
 			ReleaseFrame	savedRBP
 			XOR				RAX, RAX					; return zero
 			RET
@@ -154,13 +154,13 @@ zeroandexit:
 			Zero512			RCX
 			MOV				RCX, savedRDX
 			Zero512			RCX
-			JMP				exitmultnocopy
+			JMP				exit
 copyandexit:
 			MOV				RCX, savedRDX				; address of passed overflow
 			Zero512			RCX 						; zero it
 			MOV				RCX, savedRCX				; copy (whichever: multiplier or multiplicand) to callers product
 			Copy512			RCX, RDX
-			JMP				exitmultnocopy				; and exit
+			JMP				exit						; and exit
 			LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
 			LEA				RAX, padding2
 mult_u		ENDP
@@ -182,7 +182,8 @@ mult_uT64	PROC			PUBLIC
 			LOCAL			padding1 [ 8 ] :QWORD
 			LOCAL			product [ 8 ] :QWORD
 			LOCAL			overflow :QWORD
-			LOCAL			savedRCX :QWORD, savedRDX :QWORD, savedRBP :QWORD
+			LOCAL			savedRBP :QWORD
+			LOCAL			savedRCX :QWORD, savedRDX :QWORD 
 			LOCAL			padding2 [ 8 ] :QWORD
 
 			CreateFrame		160h, savedRBP
@@ -243,15 +244,15 @@ mult_uT64	PROC			PUBLIC
 
 mult_uT64	ENDP
 
-;			EXTERNDEF		div_u:PROC					; void div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor)
+;			EXTERNDEF		div_u:PROC					; s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor)
 
 ;			div_u			-	divide 512 bit dividend by 512 bit divisor, giving 512 bit quotient and remainder
-;			Prototype:		-	void div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor);
+;			Prototype:		-	s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor);
 ;			quotient		-	Address of 8 QWORDS to store resulting quotient (in RCX)
 ;			remainder		-	Address of 8 QWORDs for resulting remainder (in RDX)
 ;			dividend		-	Address of 8 QWORDS dividend (in R8)
 ;			divisor			-	Address of 8 QWORDs divisor (in R9)
-;			returns			-	nothing (0)
+;			returns			-	0 for success, -1 for attempt to divide by zero
 
 			OPTION			PROLOGUE:none
 			OPTION			EPILOGUE:none
@@ -261,7 +262,8 @@ div_u		PROC			PUBLIC
 			LOCAL			qhat[16]:QWORD
 			LOCAL			rhat[8]:QWORD
 			LOCAL			quotient[16]:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedRBP:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
+			LOCAL			savedRBP:QWORD
+			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
 			LOCAL			dadj:QWORD					; normalization adjustment
 			LOCAL			mbitn:WORD, lbitn:WORD, initn:WORD		; initial count of words of "u", the dividend aka numerator aka the number on top (zero-based, so zero to count-1)
 			LOCAL			mbitm:WORD, lbitm:WORD, initm:WORD		; initial count of words of "v", the divisor aka denominator aka the number on the bottom (u / v)
@@ -316,7 +318,7 @@ div_u		PROC			PUBLIC
 			;
 			MOV				AX, mbitm					; divisor edge cases (zero? power of two? one?)
 			CMP				AX, 0						; msb < 0? 
-			JL				cleanret					; divisor is zero, abort (Note: no indication of fail)
+			JL				divbyzero					; divisor is zero, abort
 			CMP				AX, lbitm					; msb = lsb? power of two (or one)
 			JNZ				notpow2
 
@@ -404,19 +406,25 @@ cleanret:
 			MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
 			ReleaseFrame	savedRBP
 			XOR				RAX, RAX					; return zero
+exit:
 			RET
+divbyzero:
+			MOV				AX, -1
+			JMP				exit
+
 			LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
 			LEA				RAX, padding2
 div_u		ENDP
 
-;			EXTERNDEF		div_uT64:PROC				; div_uT64( u64* quotient, u64* remainder, u64* dividend, u64 divisor)
+;			EXTERNDEF		div_uT64:PROC				; s16 div_uT64( u64* quotient, u64* remainder, u64* dividend, u64 divisor)
 
 ;			div_uT64		-	divide 512 bit dividend by 64 bit divisor, giving 512 bit quotient and 64 bit remainder
-;			Prototype:		-	void div_u( u64* quotient, u64* remainder, u64* dividend, u64 divisor);
+;			Prototype:		-	s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64 divisor);
 ;			quotient		-	Address of 8 QWORDS to store resulting quotient (in RCX)
 ;			remainder		-	Address of QWORD for resulting remainder (in RDX)
 ;			dividend		-	Address of 8 QWORDS dividend (in R8)
 ;			divisor			-	Value of 64 bit divisor (in R9)
+;			returns			-	0 for success, -1 for attempt to divide by zero
 
 			OPTION			PROLOGUE:none
 			OPTION			EPILOGUE:none
@@ -452,15 +460,16 @@ div_uT64	PROC			PUBLIC
 			DIV				R9
 			MOV				Q_PTR [ RCX + 7 * 8 ], RAX
 			MOV				Q_PTR [ R10 ], RDX				; remainder to callers remainder
-Exit:
 			XOR				RAX, RAX						; return zero
+exit:			
 			RET
 ;
 DivByZero:
 			Zero512			RCX								; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
 			XOR				RAX, RAX
-			MOV				Q_PTR [ R10 ] , RAX				;	(not possible on legit divide)
-			JMP				Exit
+			MOV				Q_PTR [ R10 ] , RAX				;
+			MOV				AX, -1							; return error (div by zero)
+			JMP				exit
 div_uT64	ENDP
 
 			END
