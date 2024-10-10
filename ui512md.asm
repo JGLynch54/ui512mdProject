@@ -170,7 +170,7 @@ mult_u		ENDP
 ;			mult_uT64		-	multiply 512 bit multiplicand by 64 bit multiplier, giving 512 product, 64 bit overflow
 ;			Prototype:		-	void mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
 ;			product			-	Address of 8 QWORDS to store resulting product (in RCX)
-;			overflow		-	QWORD for resulting overflow (in RDX)
+;			overflow		-	Address of QWORD for resulting overflow (in RDX)
 ;			multiplicand	-	Address of 8 QWORDS multiplicand (in R8)
 ;			multiplier		-	multiplier QWORD (in R9)
 ;			returns			-	nothing (0)
@@ -256,23 +256,25 @@ mult_uT64	ENDP
 
 			OPTION			PROLOGUE:none
 			OPTION			EPILOGUE:none
-div_u		PROC			PUBLIC
+div_u2		PROC			PUBLIC
 
-			LOCAL			padding1[8]:QWORD
-			LOCAL			qhat[16]:QWORD
-			LOCAL			rhat[8]:QWORD
-			LOCAL			quotient[16]:QWORD
+			LOCAL			padding1[ 8 ] :QWORD
+			LOCAL			currnumerator [ 8 ] :QWORD
+			LOCAL			trialenum [ 8 ] :QWORD
+			LOCAL			qdiv [ 8 ] :QWORD			
+			LOCAL			quotient[ 8 ] :QWORD
+			LOCAL			normdivisor [ 8 ] :QWORD
 			LOCAL			savedRBP:QWORD
-			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedR8:QWORD, savedR9:QWORD, savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
-			LOCAL			dadj:QWORD					; normalization adjustment
-			LOCAL			mbitn:WORD, lbitn:WORD, initn:WORD		; initial count of words of "u", the dividend aka numerator aka the number on top (zero-based, so zero to count-1)
+			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedR8:QWORD, savedR9:QWORD
+			LOCAL			savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
+			LOCAL			qovf : QWORD
+			LOCAL			div1 : DWORD, div2 : DWORD		; note: must be kept together, and on qword boundary (sometimes accessed together as qword)
+			LOCAL			partrem : DWORD
 			LOCAL			mbitm:WORD, lbitm:WORD, initm:WORD		; initial count of words of "v", the divisor aka denominator aka the number on the bottom (u / v)
-			LOCAL			normd:WORD					; value of normalizing variable d which is set to (radix - 1 over v sub n - 1)
-			LOCAL			loopj:WORD					; loop iterator, initially "m"
-			LOCAL			shiftadj:WORD				; divisor adjustment to fit into one word
+			LOCAL			normf : WORD
 			LOCAL			padding2[8]:QWORD
 
-			CreateFrame		240h, savedRBP
+			CreateFrame		280h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
 			MOV				savedR8, R8
@@ -283,47 +285,21 @@ div_u		PROC			PUBLIC
 			;
 			LEA				RCX, quotient
 			Zero512			RCX
-			LEA				RCX, quotient [ 8 * 8 ]
-			Zero512			RCX
-			LEA				RCX, qhat
-			Zero512			RCX
-			LEA				RCX, rhat
-			Zero512			RCX
-			XOR				RAX, RAX
-			MOV				dadj, RAX
-			MOV				normd, AX
-			MOV				loopj, AX
-			MOV				shiftadj, AX
-			; D1 [Normalize]
-			;	Determine dimensions of u and v (dividend and divisor)
-			;		Shift if it gets divisor to single or reduced words
-			;		Handle edge cases of divisor = 0, or 1, or power of 2
-			;	Add an extra word on the front of u
-			;	Multiply (again shift) by "d" (chosen as power of two)
-			MOV				RCX, savedR8				; get dimensions of dividend
-			CALL			msb_u
-			MOV				mbitn, AX
-			SHR				AX, 6
-			MOV				initn, AX
-			CALL			lsb_u
-			MOV				lbitn, AX
 			;
 			MOV				RCX, savedR9				; dimensions of divisor
 			CALL			msb_u						; count til most significant bit
-			MOV				mbitm, AX
-			SHR				AX, 6
-			MOV				initm, AX
-			CALL			lsb_u						; count to least significant bit
-			MOV				lbitm, AX
-			;
-			MOV				AX, mbitm					; divisor edge cases (zero? power of two? one?)
 			CMP				AX, 0						; msb < 0? 
 			JL				divbyzero					; divisor is zero, abort
-			CMP				AX, lbitm					; msb = lsb? power of two (or one)
-			JNZ				notpow2
-
+			MOV				mbitm, AX
+			SHR				AX, 7
+			MOV				R8, 15
+			SUB				R8, RAX
+			MOV				initm, R8W					; first non-zero word of divisor
+			CALL			lsb_u						; count to least significant bit
+			MOV				lbitm, AX
+			CMP				AX, mbitm					; divisor edge cases (zero? power of two? one?)msb = lsb? power of two (or one)
+			JNZ				D1norm
 			;	for power of two divisor (or one), shift, with shifted out bits going to remainder, exit
-
 			MOV				RDX, savedR8				; address of dividend
 			MOV				RCX, savedRDX				; address of callers remainder
 			MOV				R8, 512
@@ -340,62 +316,104 @@ div_u		PROC			PUBLIC
 			MOV				R8W, lbitm
 			CALL			shr_u						; shift dividend n bits to make quotient
 			JMP				cleanret
-notpow2:
-			MOV				AX, mbitm
-			XOR				AX, 03fh
-			CMP				AX, 60
-			JGE				no_d_adj
-			MOV				R8W, 63
-			SUB				R8W, AX
-			MOV				normd, R8W
-			JMP				copyw
-no_d_adj:
-			XOR				RAX, RAX
-			MOV				normd, AX
-
-			; copy to work area, adding extra leading word, shifting (mult) by 'd'
-copyw:
-			; shift is at most 62 bits, so get bits from first word
-			MOV				RDX, savedR9				; address of divisor
-			MOV				RCX, 7
-			SUB				CX, initm
-			LEA				RDX, [RDX] + [RCX * 8]
-
-
-			; D2 [Initialize]
-			;	loop counter "j", starting at word count of u ("m")
-			MOV				AX, initm
-			MOV				loopj, AX
-			; D3 [Calculate q]
-			;	Initial guess q is qhat, remainder r is rhat
-			;	two leading words of u / leading word of v, remainder rhat
-			;	test = to radix or greater than second word u times qhat + radix times rhat
-			;		adjust if so: decrease qhat by one, add leading word of v to rhat, repeat if rhat < radix
-
-			; D4 [Multiply and subtract]
-			;	Multiply qhat by adjusted v
-			;	Subtract from adjusted u
-			;	Test for negative
-
-			; D5 [Test remainder]
-			;	qhat to Q sub j
-			;	"go to" add back (D6) if negative, else loop on j [D7]
-
-			; D6 [Add back]
-			;	decrease Q sub j by one
-			;	Add adjusted v with leading zero to adjusted u sub n +j ...
-
-			; D7 [Loop on j]
-			;	decrease j by one
-			;	j >= 0 "go to" D3
-
-			; D8 [Un Normalize]
-			;	Q is now quotient
-			;	Divide remaining u by d for remainder
-
-			;	Clean up and return
-			;   
+			; doing divide, normalize, copy to work area
+D1norm:
+			MOV				AX, 512
+			SUB				AX, mbitm
+			OR				AX, 31
+			MOV				normf, AX
 			;
+			MOV				RDX, savedR9				; callers divisor
+			LEA				RCX, normdivisor
+			MOV				R8W, normf
+			CALL			shl_u
+
+			MOV				RDX, savedR8				; callers dividend
+			LEA				RCX, currnumerator			; starting numerator is the normalized supplied dividend
+			MOV				R8W, normf
+			CALL			shl_u
+; D2 Initialize
+			XOR				RAX, RAX
+			MOV				EAX, D_PTR [ RDX ]
+			MOV				CX, normf
+			SHR				EAX, CL						; get leadinng bits of dividend that may have been shifted out
+			MOV				div1, EAX
+			XOR				RDX, RDX
+			MOV				EDX, D_PTR currnumerator
+			MOV				div2, EDX					; div1 and div2 (collectiely: div) contains first 2 words of div
+
+			LEA				RDX, normdivisor			; normalized divisor
+			XOR				RCX, RCX
+			MOV				CX, initm
+			XOR				R10, R10
+			MOV				R10D, D_PTR [ RDX ] + [ RCX * 4 ]	; highest word of divisor
+
+			XOR				R12, R12					; counter 'j', zero to 15 (once each word)			
+D3CalcQhat:
+			DIV				R10D
+			MOV				D_PTR quotient [ R12 ], EAX
+			MOV				partrem, EDX
+			;
+			MUL				R10
+			MOV				R8, Q_PTR div1
+			SUB				R8, RAX
+			JNC				D4MultAndSub
+			;
+			ADD				partrem, R10D
+			MOV				EAX, D_PTR quotient [ R12 ]
+			DEC				RAX
+			MOV				D_PTR quotient [ R12 ], EAX
+			; 
+			MUL				R10
+			MOV				R8, Q_PTR div1
+			SUB				R8, RAX
+			JNC				D4MultAndSub
+			;
+			ADD				partrem, R10D
+			MOV				EAX, D_PTR quotient [ R12 ]
+			DEC				RAX
+			MOV				D_PTR quotient [ R12 ], EAX
+D4MultAndSub:
+			LEA				RCX, qdiv
+			LEA				RDX, qovf
+			LEA				R8, normdivisor
+			MOV				R9, RAX
+			CALL			mult_uT64
+			MOV				RAX, qovf
+			TEST			RAX, RAX
+			JNZ				errexit
+			LEA				RCX, trialenum
+			LEA				RDX, currnumerator
+			LEA				R8, qdiv
+			CALL			sub_u
+; D5 Test remainder
+			TEST			RAX, RAX
+			JNZ				D6AddBack
+			LEA				RCX, currnumerator
+			LEA				RDX, trialenum
+			Copy512			RCX, RDX
+			JMP				D7Loop
+D6AddBack:
+			MOV				EAX, D_PTR quotient [ R12 ]
+			DEC				RAX
+			MOV				D_PTR quotient [ R12 ], EAX	
+D7Loop:
+			LEA				R12, 4 [ R12 ]
+			CMP				R12, 15 * 4
+			JGE				D8UnNormalize
+			XOR				RDX, RDX
+			XOR				RAX, RAX
+				
+			JMP				D3CalcQhat
+D8UnNormalize:
+			MOV				RCX, savedRDX				; reduced working numerator is now the remainder
+			LEA				RDX, currnumerator			; copy to callers remainder
+			MOV				R8W, normf
+			CALL			shr_u
+			;
+			MOV				RCX, savedRCX				; copy working quotient to callers quotient
+			LEA				RDX, quotient
+			Copy512			RCX, RDX
 cleanret:
 			MOV				R12, savedR12
 			MOV				R11, savedR11
@@ -411,6 +429,162 @@ exit:
 divbyzero:
 			MOV				AX, -1
 			JMP				exit
+
+errexit:
+			JMP				cleanret
+
+			LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
+			LEA				RAX, padding2
+div_u2		ENDP
+
+
+;			EXTERNDEF		div_u:PROC					; s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor)
+
+;			div_u			-	divide 512 bit dividend by 512 bit divisor, giving 512 bit quotient and remainder
+;			Prototype:		-	s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor);
+;			quotient		-	Address of 8 QWORDS to store resulting quotient (in RCX)
+;			remainder		-	Address of 8 QWORDs for resulting remainder (in RDX)
+;			dividend		-	Address of 8 QWORDS dividend (in R8)
+;			divisor			-	Address of 8 QWORDs divisor (in R9)
+;			returns			-	0 for success, -1 for attempt to divide by zero
+
+			OPTION			PROLOGUE:none
+			OPTION			EPILOGUE:none
+div_u		PROC			PUBLIC
+
+			LOCAL			padding1[ 8 ] :QWORD
+			LOCAL			currnumerator [ 8 ] :QWORD
+			LOCAL			trialenum [ 8 ] :QWORD
+			LOCAL			qdiv [ 8 ] :QWORD			
+			LOCAL			quotient[ 8 ] :QWORD
+			LOCAL			normdivisor [ 8 ] :QWORD
+			LOCAL			savedRBP:QWORD
+			LOCAL			savedRCX:QWORD, savedRDX:QWORD, savedR8:QWORD, savedR9:QWORD
+			LOCAL			savedR10:QWORD, savedR11:QWORD, savedR12:QWORD
+			LOCAL			qovf : QWORD
+			LOCAL			leadingdivisor : QWORD
+			LOCAL			partrem : QWORD
+			LOCAL			normf : WORD
+			LOCAL			padding2[8]:QWORD
+
+			CreateFrame		280h, savedRBP
+			MOV				savedRCX, RCX
+			MOV				savedRDX, RDX
+			MOV				savedR8, R8
+			MOV				savedR9, R9
+			MOV				savedR10, R10
+			MOV				savedR11, R11
+			MOV				savedR12, R12
+			;
+			Zero512			RCX							; zero callers quotient
+			MOV				RCX, RDX
+			Zero512			RCX							; zero callers remainder
+			LEA				RCX, quotient
+			Zero512			RCX							; zero working quotient
+			;
+			MOV				RCX, savedR9				; divisor
+			CALL			msb_u						; most significant bit
+			CMP				AX, 0						; msb < 0? 
+			JL				divbyzero					; divisor is zero, abort
+			CMP				AX, 64						; divisor only one 64-bit word?
+			JGE				mbynDiv						; no, do divide of m digit by n digit
+			;	divide of m 64-bit digits by one 64 bit divisor
+			MOV				RCX, savedRCX
+			MOV				RDX, savedRDX
+			MOV				R8, savedR8
+			MOV				RAX, savedR9
+			MOV				R9, Q_PTR [RAX + 7 * 8]
+			CALL			div_uT64
+			MOV				RCX, savedRCX
+			MOV				RAX, Q_PTR [ RCX ]
+			MOV				Q_PTR [ RCX + 7 * 8 ], RAX
+			XOR				RAX, RAX
+			MOV				Q_PTR [ RCX ], RAX
+			JMP				cleanupret
+	
+mbynDiv:
+			MOV				CX, 511
+			XCHG			AX, CX
+			SUB				AX, CX						
+			AND				AX, 003fh					; Nr leading zero bits in leading non-zero word of divisor
+			MOV				normf, AX
+						;
+			MOV				RDX, savedR9				; callers divisor
+			LEA				RCX, normdivisor
+			MOV				R8W, normf
+			CALL			shl_u
+
+			MOV				RDX, savedR8				; callers dividend
+			LEA				RCX, currnumerator			; starting numerator is the normalized supplied dividend
+			MOV				R8W, normf
+			CALL			shl_u
+
+			MOV				RDX, Q_PTR [ RDX ]
+			MOV				CX, 003fH
+			SUB				CX, normf
+			SHR				RDX, CL						; get leadinng bits of dividend that may have been shifted out
+			MOV				partrem, RDX
+
+			LEA				RCX, normdivisor
+findleading:			
+			MOV				R11, Q_PTR [ RCX ]
+			TEST			R11, R11
+			JNZ				gotdiv
+			LEA				RCX, 8 [ RCX ]				; divisor alredy tested, it is non-zero, no need to check for index out of range
+			JMP				findleading
+gotdiv:
+			MOV				leadingdivisor, R11
+			XOR				R12, R12
+divloop:
+			MOV				RDX, partrem
+			MOV				RAX, currnumerator [ R12 ]
+			DIV				R11
+			MOV				quotient [ R12 ], RAX
+			MOV				partrem, RDX
+D4MultAndSub:
+			LEA				RCX, qdiv
+			LEA				RDX, qovf
+			LEA				R8, normdivisor
+			MOV				R9, RAX
+			CALL			mult_uT64
+			MOV				RAX, qovf
+			TEST			RAX, RAX
+			JNZ				errexit
+			LEA				RCX, currnumerator
+			LEA				RDX, currnumerator
+			LEA				R8, qdiv
+			CALL			sub_u
+			LEA				R12, 8 [ R12 ]
+			CMP				R12, 8 * 8
+			JL				divloop
+
+D8UnNormalize:
+			MOV				RCX, savedRDX				; reduced working numerator is now the remainder
+			LEA				RDX, currnumerator			; copy to callers remainder
+			MOV				R8W, normf
+			CALL			shr_u
+			;
+			MOV				RCX, savedRCX				; copy working quotient to callers quotient
+			LEA				RDX, quotient
+			Copy512			RCX, RDX
+cleanupret:
+			MOV				R12, savedR12
+			MOV				R11, savedR11
+			MOV				R10, savedR10
+			MOV				R9,  savedR9
+			MOV				R8,  savedR8
+			MOV				RDX, savedRDX
+			MOV				RCX, savedRCX				; restore parameter registers back to "as-called" values
+			ReleaseFrame	savedRBP
+			XOR				RAX, RAX					; return zero
+exit:
+			RET
+divbyzero:
+			MOV				AX, -1
+			JMP				exit
+
+errexit:
+			JMP				cleanupret
 
 			LEA				RAX, padding1				; reference local variables meant for padding to remove unreferenced variable warning from assembler
 			LEA				RAX, padding2
