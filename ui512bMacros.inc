@@ -50,7 +50,7 @@
 ;				OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ;				SOFTWARE.
 ;
-.list
+
 IFNDEF						ui512bMacros_INC
 ui512bMacros_INC EQU		<1>
 ;           header file equivalent extern declarations

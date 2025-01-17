@@ -123,6 +123,7 @@
     </MASM>
     <MASM>
       <AssembledCodeListingFile>$(SolutionDir)%(FileName).cod</AssembledCodeListingFile>
+      <ListAllAvailableInformation>true</ListAllAvailableInformation>
     </MASM>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

@@ -6,20 +6,22 @@
 //		Date:			June 19, 2024
 //
 //		ui512 is a small project to provide basic operations for a variable type of unsigned 512 bit integer.
-//		The basic operations : zero, copy, compare, add, subtract.
-//		Other optional modules provide bit ops and multiply / divide.
-//		It is written in assembly language, using the MASM ( ml64 ) assembler provided as an option within Visual Studio.
-//		( currently using VS Community 2022 17.9.6 )
+//
+//		ui512a provides basic operations : zero, copy, compare, add, subtract.
+//		ui512b provides basic bit - oriented operations : shift left, shift right, and, or , not, least significant bit and most significant bit.
+//      ui512md provides multiply and divide.
+//
+//		It is written in assembly language, using the MASM(ml64) assembler provided as an option within Visual Studio.
+//		(currently using VS Community 2022 17.9.6)
+//
 //		It provides external signatures that allow linkage to C and C++ programs,
 //		where a shell / wrapper could encapsulate the methods as part of an object.
-//		It has assembly time options directing the use of Intel processor extensions : AVX4, AVX2, SIMD, or none :
-//		( Z ( 512 ), Y ( 256 ), or X ( 128 ) registers, or regular Q ( 64bit ) ).
+//
+// 		It has assembly time options directing the use of Intel processor extensions : AVX4, AVX2, SIMD, or none :
+//		(Z(512), Y(256), or X(128) registers, or regular Q(64bit)).
+//
 //		If processor extensions are used, the caller must align the variables declared and passed
-//		on the appropriate byte boundary ( e.g. alignas 64 for 512 )
-//		This module is very light - weight ( less than 1K bytes ) and relatively fast,
-//		but is not intended for all processor types or all environments.
-//		Use for private ( hobbyist ), or instructional,
-//		or as an example for more ambitious projects is all it is meant to be.
+//		on the appropriate byte boundary(e.g. alignas 64 for 512)
 // 
 // 		ui512b provides basic bit-oriented operations: shift left, shift right, and, or, not,
 //		least significant bit and most significant bit.
@@ -79,14 +81,17 @@ namespace ui512mdTests
 			//	Check distibution of "random" numbers
 			u64 seed = 0;
 			const u32 dec = 10;
-			u32 dist[dec]{ 0 };
+			u32 dist[dec]{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+
 			const u64 split = 9223372036854775807ull / dec;
 			u32 distc = 0;
+			float varsum = 0.0;
 			float deviation = 0.0;
+			float D = 0.0;
+			float sumD = 0.0;
 			float varience = 0.0;
 			const u32 randomcount = 1000000;
 			const s32 norm = randomcount / dec;
-
 			for (u32 i = 0; i < randomcount; i++)
 			{
 				seed = RandomU64(&seed);
@@ -99,20 +104,31 @@ namespace ui512mdTests
 			msgd += format("Distribution of numbers accross the deciles indicates the quality of the generator.\n\n");
 			msgd += "Distribution by decile:";
 			string msgv = "Variance from mean:\t";
+			string msgchi = "Varience ^2 (chi):\t";
 
 			for (int i = 0; i < 10; i++)
 			{
 				deviation = float(abs(long(norm) - long(dist[i])));
+				D = (deviation * deviation) / float(long(norm));
+				sumD += D;
 				varience = float(deviation) / float(norm) * 100.0f;
+				varsum += varience;
 				msgd += format("\t{:6d}", dist[i]);
 				msgv += format("\t{:5.3f}% ", varience);
+				msgchi += format("\t{:5.3f}% ", D);
 				distc += dist[i];
 			};
 
 			msgd += "\t\tDecile counts sum to: " + to_string(distc) + "\n";
 			Logger::WriteMessage(msgd.c_str());
+			msgv += "\t\tVarience sums to: ";
+			msgv += format("\t{:6.3f}% ", varsum);
 			msgv += '\n';
 			Logger::WriteMessage(msgv.c_str());
+			msgchi += "\t\tChi distribution: ";
+			msgchi += format("\t{:6.3f}% ", sumD);
+			msgchi += '\n';
+			Logger::WriteMessage(msgchi.c_str());
 		};
 
 		TEST_METHOD(ui512md_01_mul)
@@ -208,7 +224,7 @@ namespace ui512mdTests
 			// Third test, a multiply by sums of random powers of two. 
 			// Building "expected" is a bit more complicated
 
-			const u16 nrBits = 192;				// the generated random number will have nrBits randomly selected and "on"
+			const u16 nrBits = 256;				// the generated random number will have nrBits randomly selected and "on"
 			u16 BitsUsed[nrBits] = { 0 };	// intialize all to zero
 			for (int i = 0; i < runcount; i++)
 			{

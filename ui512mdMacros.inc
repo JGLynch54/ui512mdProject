@@ -2,32 +2,38 @@
 ;
 ;			ui512mdMacros
 ;
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;			File:			ui512mdMacros.inc
 ;			Author:			John G. Lynch
 ;			Legal:			Copyright @2024, per MIT License below
 ;			Date:			June 20, 2024
+
 ;
 ;			Notes:
 ;				ui512 is a small project to provide basic operations for a variable type of unsigned 512 bit integer.
-;				The basic operations: zero, copy, compare, add, subtract.
-;               Other optional modules provide bit ops and multiply / divide.
+;
+;				ui512a provides basic operations: zero, copy, compare, add, subtract.
+;				ui512b provides basic bit-oriented operations: shift left, shift right, and, or, not, least significant bit and most significant bit.
+;               ui512md provides multiply and divide.
+;
 ;				It is written in assembly language, using the MASM (ml64) assembler provided as an option within Visual Studio.
 ;				(currently using VS Community 2022 17.9.6)
+;
 ;				It provides external signatures that allow linkage to C and C++ programs,
 ;				where a shell/wrapper could encapsulate the methods as part of an object.
+;
 ;				It has assembly time options directing the use of Intel processor extensions: AVX4, AVX2, SIMD, or none:
 ;				(Z (512), Y (256), or X (128) registers, or regular Q (64bit)).
+;
 ;				If processor extensions are used, the caller must align the variables declared and passed
 ;				on the appropriate byte boundary (e.g. alignas 64 for 512)
+;
 ;				This module is very light-weight (less than 1K bytes) and relatively fast,
 ;				but is not intended for all processor types or all environments. 
-;				Use for private (hobbyist), or instructional,
-;				or as an example for more ambitious projects is all it is meant to be.
 ;
-;				ui512b provides basic bit-oriented operations: shift left, shift right, and, or, not,
-;               least significant bit and most significant bit.
+;				Use for private (hobbyist), or instructional, or as an example for more ambitious projects is all it is meant to be.
 ;
-;				This module, ui512md, adds multiply and divide funnctions.
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;
 ;			MIT License
 ;
@@ -51,11 +57,12 @@
 ;				OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ;				SOFTWARE.
 ;
-.list
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 IFNDEF						ui512mdMacros_INC
 ui512mdMacros_INC EQU		<1>
 
-
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;			signatures (from ui512md.asm)
 
 ;			mult_uT64		-	multiply 512 bit multiplicand by 64 bit multiplier, giving 512 product, 64 bit overflow
@@ -73,6 +80,8 @@ EXTERNDEF	div_uT64:PROC	;	s16 div_uT64( u64* quotient, u64* remainder, u64* divi
 ;			div_u			-	divide 512 bit dividend by 512 bit divisor, giving 512 bit quotient and remainder
 ;			Prototype:		-	s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor);
 EXTERNDEF	div_u:PROC		;	s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64* divisor);
+
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
 
 CreateFrame	MACRO			argsize, argsavename
@@ -107,6 +116,8 @@ CreateFrame	MACRO			argsize, argsavename
 			XCHG			RAX, RBP					; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
 			MOV				argsavename, RAX			; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
 			ENDM
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
+
 
 ReleaseFrame MACRO			argsavename
 ;			release memory set up by createframe macro
@@ -118,7 +129,7 @@ ReleaseFrame MACRO			argsavename
 			LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
 			ENDM
 
-
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;==========================================================================================
 ;           Notes on x64 calling conventions        aka "fast call"
 ; ref: https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
