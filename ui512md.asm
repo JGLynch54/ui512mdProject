@@ -337,21 +337,25 @@ mult_uT64	ENDP
 div_u		PROC			PUBLIC
 
 			LOCAL			padding1 [ 8 ] : QWORD
-			LOCAL			currnumerator [ 8 ] : QWORD
+			LOCAL			currnumerator [ 16 ] : QWORD
 			LOCAL			qdiv [ 8 ] : QWORD			
 			LOCAL			quotient [ 8 ] : QWORD
 			LOCAL			normdivisor [ 8 ] : QWORD
 			LOCAL			savedRBP : QWORD
 			LOCAL			savedRCX : QWORD, savedRDX : QWORD, savedR8 : QWORD, savedR9 : QWORD
 			LOCAL			savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD
+			LOCAL			qHat : QWORD
+			LOCAL			rHat : QWORD
 			LOCAL			qovf : QWORD
-			LOCAL			leadingdivisor : QWORD
-			LOCAL			partrem : QWORD
+			LOCAL			currenumbegin : QWORD
 			LOCAL			normf : WORD
+			LOCAL			limEnumIdx : WORD
+			LOCAL			jIdx: WORD
+			
 			LOCAL			padding2 [ 8 ] : QWORD
 div_oset	EQU				padding2 + 64 - padding1
 
-			CreateFrame		280h, savedRBP
+			CreateFrame		300h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
 			MOV				savedR8, R8
@@ -373,63 +377,97 @@ div_oset	EQU				padding2 + 64 - padding1
 			CMP				AX, 64						; divisor only one 64-bit word?
 			JGE				mbynDiv						; no, do divide of m digit by n digit
 			;	divide of m 64-bit digits by one 64 bit divisor
-			MOV				RCX, savedRCX
-			MOV				RDX, savedRDX
-			MOV				R8, savedR8
+			MOV				RCX, savedRCX				; set up parms for call to div by 64bit: RCX - addr of quotient
+			MOV				RDX, savedRDX				; RDX - addr of remainder
+			MOV				R8, savedR8					; R8 - addr of dividend
 			MOV				RAX, savedR9
-			MOV				R9, Q_PTR [RAX + 7 * 8]
+			MOV				R9, Q_PTR [RAX + 7 * 8 ]	; R9 - value of 64 bit divisor
 			CALL			div_uT64
-			MOV				RCX, savedRCX
-			MOV				RAX, Q_PTR [ RCX ]
-			MOV				Q_PTR [ RCX + 7 * 8 ], RAX
-			XOR				RAX, RAX
-			MOV				Q_PTR [ RCX ], RAX
+			MOV				RDX, savedRDX				; move 64 bit remainder to last word of 8 word remainder
+			MOV				RAX, Q_PTR [ RDX ]
+			MOV				Q_PTR [ RDX + 7 * 8 ], RAX
+			XOR				RAX, RAX					; clear first word of remainder (where 64 bit divide put it)
+			MOV				Q_PTR [ RDX ], RAX
 			JMP				cleanupret	
 mbynDiv:
+;			Step D1: Normalize	
+
 			MOV				CX, 511
 			XCHG			AX, CX
 			SUB				AX, CX						
-			AND				AX, 003fh					; Nr leading zero bits in leading non-zero word of divisor
-			MOV				normf, AX
-						;
+			MOV				normf, AX					; Nr leading zero bits in  divisor
 			MOV				RDX, savedR9				; callers divisor
-			LEA				RCX, normdivisor
+			LEA				RCX, normdivisor			; local copy of divisor, normalized
 			MOV				R8W, normf
-			CALL			shl_u
-
+			CALL			shl_u						; by shifting until MSB is high bit
 			MOV				RDX, savedR8				; callers dividend
-			LEA				RCX, currnumerator			; starting numerator is the normalized supplied dividend
+			LEA				RCX, currnumerator [ 8 * 8 ]; starting numerator is the normalized supplied dividend
 			MOV				R8W, normf
 			CALL			shl_u
+			MOV				RDX, savedR8
+			LEA				RCX, currnumerator [ 0 * 8 ]
+			MOV				R8W, 512
+			SUB				R8W, normf
+			CALL			shr_u						; now have up to 16 word bit-shifted dividend in 'enumerator'
+			LEA				RCX, currnumerator
+@@:
+			MOV				currenumbegin, RCX			; set address of the first non-zero word of the dividend (enumerator)
+			MOV				RDX, [ RCX ]
+			TEST			RDX, RDX
+			LEA				RCX, [ RCX + 8 ]
+			JZ				@B
+			MOVZX			RCX, normf
+			SHR				CX, 4
+			MOV				limEnumIdx, CX
+;			Step D2: Initialize
+			XOR				RAX, RAX
+			MOV				jIdx, AX
 
-			MOV				RDX, Q_PTR [ RDX ]
-			MOV				CX, 003fH
-			SUB				CX, normf
-			SHR				RDX, CL						; get leadinng bits of dividend that may have been shifted out
-			MOV				partrem, RDX
+;			Step D3: Calculate  q^
+D3:
+			XOR				RDX, RDX					; DIV takes 128 bits, RDX the high 64, RAX the low
+			MOVZX			RAX, jIdx
+			MOV				RCX, currenumbegin
+			LEA				RCX, [ RCX + RAX * 8 ]
+			MOV				RDX, [ RCX ]
+			MOV				RAX, [ RCX + 8 ]
+			MOV				RCX, normdivisor
+			DIV				RCX
+			MOV				qHat, RAX
+			MOV				rHat, RDX
+;			test q^
+@retest:
+			TEST			RAX, RAX					; q^ = b? (2^64)
+			JZ				@adj
+			MUL				normdivisor [ 1 * 8 ]
+			MOVZX			RCX, jIdx
+			MOV				R8, currenumbegin
+			MOV				RCX, [ R8 + RCX * 8 + 16]
+			ADD				RCX, rHat
+			JC				@5
+			CMP				RAX, RCX
+			JG				@adj
+@5:			CMP				RDX, 1
+			JG				@adj
+			CMP				RAX, RCX
+			JLE				D4
+@adj:
+			MOV				RAX, qHat
+			DEC				RAX
+			MOV				qHat, RAX
+			MOV				RAX, RCX
+			ADD				RAX, rHat
+			MOV				rHat, RAX
+			MOV				RAX, qHat
+			JNC				@retest
 
-			LEA				RCX, normdivisor
-findleading:			
-			MOV				R11, Q_PTR [ RCX ]
-			TEST			R11, R11
-			JNZ				gotdiv
-			LEA				RCX, 8 [ RCX ]				; divisor alredy tested, it is non-zero, no need to check for index out of range
-			JMP				findleading
-gotdiv:
-			MOV				leadingdivisor, R11
-			XOR				R12, R12
-divloop:
-			MOV				RDX, partrem
-			MOV				RAX, currnumerator [ R12 ]
-			DIV				R11
-			MOV				quotient [ R12 ], RAX
-			MOV				partrem, RDX
-D4MultAndSub:
+;			Step D4: Multiply and Subtract
+D4:
 			LEA				RCX, qdiv
 			LEA				RDX, qovf
 			LEA				R8, normdivisor
-			MOV				R9, RAX
-			CALL			mult_uT64
+			MOV				R9, qHat
+			CALL			mult_uT64					; multiply divisor by trial quotient digit (qHat)
 			MOV				RAX, qovf
 			TEST			RAX, RAX
 			JNZ				cleanupret
@@ -439,7 +477,7 @@ D4MultAndSub:
 			CALL			sub_u
 			LEA				R12, 8 [ R12 ]
 			CMP				R12, 8 * 8
-			JL				divloop
+			JL				D3
 
 D8UnNormalize:
 			MOV				RCX, savedRDX				; reduced working numerator is now the remainder

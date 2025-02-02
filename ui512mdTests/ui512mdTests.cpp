@@ -57,7 +57,7 @@ namespace ui512mdTests
 	public:
 
 		const s32 runcount = 1000;
-		const s32 timingcount = 1000000;
+		const s32 timingcount = 10000000;
 
 		/// <summary>
 		/// Random number generator
@@ -558,8 +558,8 @@ namespace ui512mdTests
 				{
 					dividend[j] = RandomU64(&seed);
 				};
-				zero_u(quotient);
 
+				zero_u(quotient);
 				set_uT64(divisor, 2);
 				shr_u(expectedquotient, dividend, u16(1));
 				shl_u(expectedremainder, dividend, 511);
@@ -574,8 +574,6 @@ namespace ui512mdTests
 					Assert::AreEqual(expectedremainder[j], remainder[j],
 						MSG(L"Remainder failed " << i));
 				};
-
-
 			};
 
 			string runmsg1 = "Divide function testing. Simple divide by 2 " +
