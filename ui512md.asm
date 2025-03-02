@@ -58,13 +58,17 @@
 ;
 ;
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
-			INCLUDE			ui512aMacros.inc
-			INCLUDE			ui512bMacros.inc
-			INCLUDE			ui512mdMacros.inc
+				INCLUDE			ui512aMacros.inc
+				INCLUDE			ui512bMacros.inc
+				INCLUDE			ui512mdMacros.inc
 
-			OPTION			casemap:none
-.CODE						ui512md
-;
+				OPTION			casemap:none
+.CODE			ui512md
+				OPTION			PROLOGUE:none
+				OPTION			EPILOGUE:none
+
+				MemConstants
+
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;			EXTERNDEF		mult_u:PROC					; void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
 ;			mult_u			-	multiply 512 multiplicand by 512 multiplier, giving 512 product, overflow
@@ -75,113 +79,118 @@
 ;			multiplier		-	Address of 8 QWORDS multiplier (in R9)
 ;			returns			-	nothing (0)
 
-			OPTION			PROLOGUE:none
-			OPTION			EPILOGUE:none
-mult_u		PROC			PUBLIC
+mult_u			PROC			PUBLIC
+				LOCAL			padding1 [ 8 ] : QWORD
+				LOCAL			product [ 16 ] : QWORD
+				LOCAL			savedRBP : QWORD
+				LOCAL			savedRCX : QWORD, savedRDX : QWORD, savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD
+				LOCAL			plierl : WORD						; low limit index of of multiplier (7 - first non-zero)
+				LOCAL			candl : WORD						; low limit index of multiplicand
+				LOCAL			padding2 [ 16 ] : QWORD
+mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local memmory declarations
+				CreateFrame		300h, savedRBP
+				MOV				savedRCX, RCX
+				MOV				savedRDX, RDX
+				MOV				savedR10, R10
+				MOV				savedR11, R11
+				MOV				savedR12, R12
 
-			LOCAL			padding1 [ 8 ] : QWORD
-			LOCAL			product [ 16 ] : QWORD
-			LOCAL			savedRBP : QWORD
-			LOCAL			savedRCX : QWORD, savedRDX : QWORD, savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD
-			LOCAL			plierl : WORD					; low limit index of of multiplier (7 - first non-zero)
-			LOCAL			candl : WORD					; low limit index of multiplicand
-			LOCAL			padding2 [ 8 ] : QWORD
-mult_u_ofs	EQU				padding2 + 64 - padding1		; offset is the size of the local memmory declarations
+				CheckAlign		RCX									; (out) Product
+				CheckAlign		RDX									; (out) Overflow
+				CheckAlign		R8									; (in) Multiplicand
+				CheckAlign		R9									; (in) Multiplier
 
-			CreateFrame		1C0h, savedRBP
-			MOV				savedRCX, RCX
-			MOV				savedRDX, RDX
-			MOV				savedR10, R10
-			MOV				savedR11, R11
-			MOV				savedR12, R12
-;
-			MOV				RCX, R8							; examine multiplicand
-			CALL			msb_u
-			CMP				AX, -1							; multiplicand = 0? exit with product = 0
-			JE				@@zeroandexit
-			CMP				AX, 0							; multiplicand = 1?	exit with product = multiplier
-			MOV				RDX, R9							; address of multiplier (to be copied to product)
-			JE				@@copyandexit
-			SHR				AX, 6
-			MOV				RCX, 7
-			SUB				CX, AX
-			MOV				candl, CX						; save off multiplicand index lower limit (eliminate multiplying leading zero words)
-;
-			MOV				RCX, R9							; examine multiplier
-			CALL			msb_u
-			CMP				AX, -1							; multiplier = 0? exit with product = 0
-			JE				@@zeroandexit
-			CMP				AX, 0							; multiplier = 1? exit with product = multiplicand
-			MOV				RDX, R8							; address of multiplicand (to be copied to product)
-			JE				@@copyandexit
-			SHR				AX, 6
-			MOV				RCX, 7
-			SUB				CX, AX
-			MOV				plierl, CX						; save off multiplier index lower limit (eliminate multiplying leading zero words)
-			;
-			LEA				RCX, product [ 0 ]
-			Zero512			RCX								; clear working copy of overflow, need to start as zero, results are added in
-			LEA				RCX, product[ 8 * 8 ]
-			Zero512			RCX								; clear working copy of product (they need to be contiguous, so using working copy, not callers)
-			;
-			MOV				R11, 7							; index for multiplier (reduced until less then saved plierl)
-			MOV				R12, 7							; index for multiplicand (reduced until less than saved candl)
+; Examine multiplicand, save dimensions, handle edge cases of zero or one
+				MOV				RCX, R8								; examine multiplicand
+				CALL			msb_u
+				CMP				EAX, -1								; multiplicand = 0? exit with product = 0
+				JE				@@zeroandexit
+				CMP				EAX, 0								; multiplicand = 1?	exit with product = multiplier
+				MOV				RDX, R9								; address of multiplier (to be copied to product)
+				JE				@@copyandexit
+				SHR				AX, 6								; divide by 64 to get Nr words
+				MOV				RCX, 7
+				SUB				CX, AX								; subtract from 7 to get starting (high order) begining index
+				MOV				candl, CX							; save off multiplicand index lower limit (eliminate multiplying leading zero words)
+
+; Examine multiplier, save dimensions, handle edge cases of zero or one
+				MOV				RCX, R9								; examine multiplier
+				CALL			msb_u
+				CMP				EAX, -1								; multiplier = 0? exit with product = 0
+				JE				@@zeroandexit
+				CMP				EAX, 0								; multiplier = 1? exit with product = multiplicand
+				MOV				RDX, R8								; address of multiplicand (to be copied to product)
+				JE				@@copyandexit
+				SHR				AX, 6
+				MOV				RCX, 7
+				SUB				CX, AX
+				MOV				plierl, CX							; save off multiplier index lower limit (eliminate multiplying leading zero words)
+
+; In heap / frame / stack reserved memory, clear 16 word area for overflow/product; set up indexes for loop
+				LEA				RCX, product [ 0 ]
+				Zero512			RCX									; clear working copy of overflow, need to start as zero, results are added in
+				LEA				RCX, product[ 8 * 8 ]
+				Zero512			RCX									; clear working copy of product (they need to be contiguous, so using working copy, not callers)
+				MOV				R11, 7								; index for multiplier (reduced until less then saved plierl)
+				MOV				R12, 7								; index for multiplicand (reduced until less than saved candl)
+
+; multiply loop: an outer loop for each non-zero word of multiplicand, with an inner loop for each non-zero word of multiplier
 @@multloop:
-			MOV				R10, R11
-			ADD				R10, R12
-			INC				R10								; index for product/overflow 
-			MOV				RAX, [ R8 ] + [ R12 * 8 ]		; get qword of multiplicand
-			MUL				Q_PTR [ R9 ] + [ R11 * 8 ]		; multiply by qword of multiplier
-			ADD				product [ R10 * 8 ], RAX
-			DEC				R10								; preserves carry flag
+				MOV				R10, R11							; R10 holds index for overflow / product work area (results)
+				ADD				R10, R12
+				INC				R10									; index for product/overflow 
+				MOV				RAX, [ R8 ] + [ R12 * 8 ]			; get qword of multiplicand
+				MUL				Q_PTR [ R9 ] + [ R11 * 8 ]			; multiply by qword of multiplier
+				ADD				product [ R10 * 8 ], RAX
+				DEC				R10									; preserves carry flag
 @@:
-			ADC				product [ R10 * 8 ], RDX
-			MOV				RDX, 0							; again, preserves carry flag
-			JNC				@F
-			DEC				R10
-			JGE				@B
-@@:															; next word of multiplicand
-			DEC				R12
-			CMP				R12W, candl
-			JGE				@@multloop
-			MOV				R12, 7
-			DEC				R11
-			CMP				R11W, plierl
-			JGE				@@multloop						; next word of multiplier
+				ADC				product [ R10 * 8 ], RDX
+				MOV				RDX, 0								; again, preserves carry flag
+				JNC				@F
+				DEC				R10
+				JGE				@B
+@@:																	; next word of multiplicand
+				DEC				R12
+				CMP				R12W, candl
+				JGE				@@multloop
+				MOV				R12, 7
+				DEC				R11
+				CMP				R11W, plierl
+				JGE				@@multloop							; next word of multiplier
 
-;			copy working product/overflow to callers product / overflow
-			MOV				RCX, savedRCX
-			LEA				RDX, product [ 8 * 8 ]
-			Copy512			RCX, RDX						; copy working product to callers product
-			MOV				RCX, savedRDX
-			LEA				RDX, product [ 0 ]
-			Copy512			RCX, RDX						; copy working overflow to callers overflow
+; copy working product/overflow to callers product / overflow
+				MOV				RCX, savedRCX
+				LEA				RDX, product [ 8 * 8 ]
+				Copy512			RCX, RDX						; copy working product to callers product
+				MOV				RCX, savedRDX
+				LEA				RDX, product [ 0 ]
+				Copy512			RCX, RDX						; copy working overflow to callers overflow
 
-;			restore regs, release frame, return
+; restore regs, release frame, return
 @@exit:			
-			MOV				R10, savedR10
-			MOV				R11, savedR11
-			MOV				R12, savedR12					; restore any non-volitile regs used
-			ReleaseFrame	savedRBP
-			XOR				RAX, RAX						; return zero
-			RET
+				MOV				R10, savedR10
+				MOV				R11, savedR11
+				MOV				R12, savedR12					; restore any non-volitile regs used
+				ReleaseFrame	savedRBP
+				XOR				RAX, RAX						; return zero
+				RET
 
-;			zero callers product and overflow
+; zero callers product and overflow
 @@zeroandexit:
-			MOV				RCX, savedRCX
-			Zero512			RCX
-			MOV				RCX, savedRDX
-			Zero512			RCX
-			JMP				@@exit
+				MOV				RCX, savedRCX
+				Zero512			RCX
+				MOV				RCX, savedRDX
+				Zero512			RCX
+				JMP				@@exit
 
-;			multiplying by 1: zero overflow, copy the non-one to the product
+; multiplying by 1: zero overflow, copy the non-one to the product
 @@copyandexit:
-			MOV				RCX, savedRDX					; address of passed overflow
-			Zero512			RCX 							; zero it
-			MOV				RCX, savedRCX					; copy (whichever: multiplier or multiplicand) to callers product
-			Copy512			RCX, RDX
-			JMP				@@exit							; and exit
-mult_u		ENDP
+				MOV				RCX, savedRDX					; address of passed overflow
+				Zero512			RCX 							; zero it
+				MOV				RCX, savedRCX					; copy (whichever: multiplier or multiplicand) to callers product
+				Copy512			RCX, RDX						; RDX "passed" here from whomever jumped here (either multiplier, or multiplicand in RDX)
+				JMP				@@exit							; and exit
+mult_u			ENDP
 
 ;
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -205,7 +214,7 @@ mult_uT64	PROC			PUBLIC
 			LOCAL			padding2 [ 8 ] :QWORD
 mult64_oset	EQU				padding2 + 64 - padding1
 
-			CreateFrame		160h, savedRBP
+			CreateFrame		200h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
 
@@ -214,66 +223,7 @@ mult64_oset	EQU				padding2 + 64 - padding1
 			XOR				RAX, RAX
 			MOV				overflow, RAX
 			;
-	IF		__PrefRegs
-			VMOVDQA64		ZMM29, ZM_PTR [ R8 ]
-			LEA				RAX, MaskBit7					; lowest order word ( 7 of 0-7 )
-			KMOVB			K1, RAX
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9								; times multiplier
-			ADD				product [ 7 * 8 ], RAX			; to working product 8th word
-			ADC				product [ 6 * 8 ], RDX			; 'overflow' to 7th qword of working product
-
-			KSHIFTRB		K1, K1, 1						; 6 of 0-7
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9
-			ADD				product [ 6 * 8 ], RAX			
-			ADC				product [ 5 * 8 ], RDX
-
-			KSHIFTRB		K1, K1, 1						; 5 of 0-7
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9
-			ADD				product [ 5 * 8 ], RAX			
-			ADC				product [ 4 * 8 ], RDX
-
-			KSHIFTRB		K1, K1, 1						; 4 of 0-7
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9
-			ADD				product [ 4 * 8 ], RAX			
-			ADC				product [ 3 * 8 ], RDX
-
-			KSHIFTRB		K1, K1, 1						; 3 of 0-7
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9
-			ADD				product [ 3 * 8 ], RAX			
-			ADC				product [ 2* 8 ], RDX
-
-			KSHIFTRB		K1, K1, 1						; 2 of 0-7
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9
-			ADD				product [ 2 * 8 ], RAX			
-			ADC				product [ 1 * 8 ], RDX
-
-			KSHIFTRB		K1, K1, 1						; 1 of 0-7
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9
-			ADD				product [ 1 * 8 ], RAX			
-			ADC				product [ 0 * 8 ], RDX
-
-			KSHIFTRB		K1, K1, 1						; 0 of 0-7
-			VPCOMPRESSQ		ZMM0 {k1}{z}, ZMM29
-			VMOVQ			RAX, XMM0
-			MUL				R9
-			ADD				product [ 0 * 8 ], RAX			
-			ADC				overflow, RDX
-
-	ELSE
+	
 			MOV				RAX, [ R8 ] + [ 7 * 8 ]			; multiplicand 8th qword
 			MUL				R9								; times multiplier
 			ADD				product [ 7 * 8 ], RAX			; to working product 8th word
@@ -306,7 +256,6 @@ mult64_oset	EQU				padding2 + 64 - padding1
 			MUL				R9
 			ADD				product [ 0 * 8 ], RAX
 			ADC				overflow, RDX					; last qword overflow is also the operation overflow
-	ENDIF
 
 			MOV				RCX, savedRCX					; send results back to caller
 			LEA				RDX, product
@@ -351,11 +300,13 @@ div_u		PROC			PUBLIC
 			LOCAL			normf : WORD
 			LOCAL			limEnumIdx : WORD
 			LOCAL			jIdx: WORD
+			LOCAL			dimM: WORD
+			LOCAL			dimN: WORD
 			
-			LOCAL			padding2 [ 8 ] : QWORD
+			LOCAL			padding2 [ 16 ] : QWORD
 div_oset	EQU				padding2 + 64 - padding1
 
-			CreateFrame		300h, savedRBP
+			CreateFrame		320h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
 			MOV				savedR8, R8
@@ -388,25 +339,41 @@ div_oset	EQU				padding2 + 64 - padding1
 			MOV				Q_PTR [ RDX + 7 * 8 ], RAX
 			XOR				RAX, RAX					; clear first word of remainder (where 64 bit divide put it)
 			MOV				Q_PTR [ RDX ], RAX
-			JMP				cleanupret	
-mbynDiv:
-;			Step D1: Normalize	
+			JMP				cleanupret
 
-			MOV				CX, 511
-			XCHG			AX, CX
-			SUB				AX, CX						
-			MOV				normf, AX					; Nr leading zero bits in  divisor
+;
+;			Going to divide an 'm' digit dividend (u), by an 'n' digit divisor (v)
+;				See Knuth, The Art of Computer Programming, Volume 2, Algorithm D, Pages 272-278
+mbynDiv:
+			MOV				dimN, AX					; still have divisor msb in AX
+			SHL				dimN, 6						; div msb by 6 to get msq (most significant qword) aka 'n'
+			MOV				normf, 64
+			SUB				normf, AX					; Nr bits to get leading divisor bit to msb saved at normf			
+			XOR				RAX, RAX
+			MOV				dimM, AX
+@@:
+			INC				dimM
+			CMP				dimM, 8
+			JE				cleanupret					; dividend is zero, both quotient and remainder already set to zero, so returm
+			CMP				RAX, [ R8 ]
+			LEA				R8, 8 [ R8 ]
+			JZ				@B
+			DEC				dimM						; now have dimensions of divisor (v) which is dimN, and dividend (u) which is dimM
+
+;			Step D1: Normalize	
+				
 			MOV				RDX, savedR9				; callers divisor
 			LEA				RCX, normdivisor			; local copy of divisor, normalized
 			MOV				R8W, normf
 			CALL			shl_u						; by shifting until MSB is high bit
+			;
 			MOV				RDX, savedR8				; callers dividend
 			LEA				RCX, currnumerator [ 8 * 8 ]; starting numerator is the normalized supplied dividend
 			MOV				R8W, normf
 			CALL			shl_u
 			MOV				RDX, savedR8
 			LEA				RCX, currnumerator [ 0 * 8 ]
-			MOV				R8W, 512
+			MOV				R8W, 64
 			SUB				R8W, normf
 			CALL			shr_u						; now have up to 16 word bit-shifted dividend in 'enumerator'
 			LEA				RCX, currnumerator

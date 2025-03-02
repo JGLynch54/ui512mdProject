@@ -100,11 +100,11 @@ namespace ui512mdTests
 
 			string msgd = "Evaluation of pseudo-random number generator.\n\n";
 			msgd += format("Generated {0:*>8} numbers.\n", randomcount);
-			msgd += format("Counted occurances of those numbers by decile, each decile {0:*>20}.\n", split);
-			msgd += format("Distribution of numbers accross the deciles indicates the quality of the generator.\n\n");
+			msgd += format("Counted occurrences of those numbers by decile, each decile {0:*>20}.\n", split);
+			msgd += format("Distribution of numbers across the deciles indicates the quality of the generator.\n\n");
 			msgd += "Distribution by decile:";
 			string msgv = "Variance from mean:\t";
-			string msgchi = "Varience ^2 (chi):\t";
+			string msgchi = "Variance ^2 (chi):\t";
 
 			for (int i = 0; i < 10; i++)
 			{
@@ -121,7 +121,7 @@ namespace ui512mdTests
 
 			msgd += "\t\tDecile counts sum to: " + to_string(distc) + "\n";
 			Logger::WriteMessage(msgd.c_str());
-			msgv += "\t\tVarience sums to: ";
+			msgv += "\t\tVariance sums to: ";
 			msgv += format("\t{:6.3f}% ", varsum);
 			msgv += '\n';
 			Logger::WriteMessage(msgv.c_str());
@@ -148,12 +148,13 @@ namespace ui512mdTests
 			alignas (64) u64 intermediateovrf[8]{ 0 };
 			alignas (64) u64 expectedproduct[8]{ 0 };
 			alignas (64) u64 expectedoverflow[8]{ 0 };
+			alignas (64) u64 work[8]{ 0 };
 
 			// First test, a simple multiply by two. 
 			// Easy to check as the expected answer is a shift left, expected overflow is a shift right
 			for (int i = 0; i < runcount; i++)
 			{
-				//	random initialize mutiplicand
+				//	random initialize multiplicand
 				for (int j = 0; j < 8; j++)
 				{
 					num1[j] = RandomU64(&seed);
@@ -181,7 +182,7 @@ namespace ui512mdTests
 				}
 			};
 
-			string runmsg1 = "Multiply function testing. Simple multiply by 2 "
+			string runmsg1 = "Multiply function testing. First test, a simple multiply by two.  "
 				+ to_string(runcount) + " times, each with pseudo random values.\n";;
 			Logger::WriteMessage(runmsg1.c_str());
 			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
@@ -216,86 +217,30 @@ namespace ui512mdTests
 				}
 			};
 
-			string runmsg2 = "Multiply function testing. Multiply by random power of 2 "
+			string runmsg2 = "Multiply function testing. Second test, a simple multiply by a random power of two. "
 				+ to_string(runcount) + " times, each with pseudo random values.\n";;
 			Logger::WriteMessage(runmsg2.c_str());
 			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
-			// Third test, a multiply by sums of random powers of two. 
-			// Building "expected" is a bit more complicated
-
-			const u16 nrBits = 256;				// the generated random number will have nrBits randomly selected and "on"
-			u16 BitsUsed[nrBits] = { 0 };	// intialize all to zero
+			// Third test, a simple multiply by a random 64 bit integer. 
+			// Still relatively easy to check as the expected answer is a shift left,
+			// expected overflow is a shift right
 			for (int i = 0; i < runcount; i++)
 			{
-				u16 bitcnt = 0;
-				fill_n(BitsUsed, nrBits, 0);
-
 				for (int j = 0; j < 8; j++)
 				{
 					num1[j] = RandomU64(&seed);
 				};
 
-				zero_u(num2);
-				zero_u(expectedproduct);
-				zero_u(expectedoverflow);
+				u64 num2_64 = RandomU64(&seed);
+				u64 expectedovfl_64 = 0;
+				set_uT64(num2, num2_64);
 
-				// build multiplier as 'N' number of random bits (avoid duplicate bits)
-				// simultaneously build expected result and overflow
-				u16 nrShift = 0;
-				for (int j = 0; j < nrBits; j++)
-				{
-					zero_u(intermediateprod);
-					zero_u(intermediateovrf);
+				mult_uT64(expectedproduct, &expectedovfl_64, num1, num2_64);
+				set_uT64(expectedoverflow, expectedovfl_64);
 
-					// Find a bit (0 to 511) that hasn't already been selected in this random number
-					bool nubit = false;
-					nrShift = RandomU64(&seed) % 512;
-					while (!nubit)
-					{
-						u16 j2 = 0;
-						for (; j2 < bitcnt; j2++)
-						{
-							if (nrShift == BitsUsed[j2])
-							{
-								break;
-							}
-						};
-						// exited compare loop. Either exhausted list, or found match. Which?
-						if (nrShift == BitsUsed[j2])
-						{
-							nrShift = RandomU64(&seed) % 512; // if match (already used), gen new, try again
-						}
-						else
-						{
-							nubit = true;						// else signal end (found a new bit to use) 
-							BitsUsed[bitcnt++] = nrShift;	// and save it so it won't be used again in this iteration
-						};
-					};
-
-					// use selected bit to build a random number (through shift/or)
-					// then build expected result of multiply (through shift / add)
-
-					// Multiplier:
-					set_uT64(num3, 1ull);
-					shl_u(num3, num3, nrShift);
-					or_u(num2, num2, num3);
-
-					// Expected:
-					shl_u(intermediateprod, num1, nrShift);
-					s32 carry = add_u(expectedproduct, expectedproduct, intermediateprod);
-					shr_u(intermediateovrf, num1, 512 - nrShift);
-					add_u(expectedoverflow, expectedoverflow, intermediateovrf);
-					if (carry != 0)
-					{
-						add_uT64(expectedoverflow, expectedoverflow, 1ull);
-					};
-				};
-
-				// Got a random multiplicand and multiplier. Execute function under test
 				mult_u(product, overflow, num1, num2);
 
-				// Compare results to expected (aborts test if they don't match)
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedproduct[j], product[j],
@@ -305,9 +250,236 @@ namespace ui512mdTests
 				}
 			};
 
-			string runmsg3 = "Multiply function testing. Multiply by sums of random powers of two "
+			string runmsg3 = "Multiply function testing. Third test, a multiply by a random 64 bit value. "
 				+ to_string(runcount) + " times, each with pseudo random values.\n";;
 			Logger::WriteMessage(runmsg3.c_str());
+			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+
+
+			// Fourth test, a multiply by sums of random powers of two into a 64 bit value. 
+			// Building "expected" is a bit more complicated. This test is more about correctly buiding "expected"
+
+			for (int i = 0; i < runcount; i++)
+			{
+				bool rbits[64];
+				std::memset(rbits, 0, sizeof(rbits));
+
+				for (int j = 0; j < 63; j++)
+				{
+					rbits[j] = (RandomU64(&seed) % 2) == 1;
+				};
+
+				for (int j = 0; j < 8; j++)
+				{
+					num1[j] = RandomU64(&seed);
+				};
+
+				set_uT64(num1, (u64)2);
+				zero_u(num2);
+				zero_u(expectedproduct);
+				zero_u(expectedoverflow);
+				zero_u(work);
+
+				// build multiplier as 'N' number of random bits (avoid duplicate bits)
+				// simultaneously build expected result and overflow
+
+				u16 nrBits = (RandomU64(&seed) % 24) + 2; //  Nr Bits somewhere between 2 and 510? 
+				for (int j = 0; j < nrBits; j++)
+				{
+					zero_u(intermediateprod);
+					zero_u(intermediateovrf);
+
+					// use selected bit to build a random number (through shift/or)
+					// then build expected result of multiply (through shift / add)
+					bool found = false;
+					u16 nrShift = 0;
+					while (nrShift == 0)
+					{
+						//	u16 rwrd = RandomU64(&seed) % 8;
+						u16 rBit = RandomU64(&seed) % 64;
+						for (u16 idx = rBit; idx < 64; idx++)
+						{
+							//u16 wt = idx / 64;
+							u16 bt = idx % 64;
+							u64 msk = 1ull << bt;
+							if (rbits[idx] && !(num2[7] & msk))
+							{
+								nrShift = idx;
+								found = true;
+								break;
+							}
+						};
+						if (!found)
+						{
+							break;
+						};
+					};
+
+					if (found)
+					{
+						// Multiplier:
+						num3[7] = 1ull;
+						//set_uT64(num3, 1ull);
+						shl_u(num3, num3, nrShift);
+						or_u(num2, num2, num3);
+
+						// Calculate expected product and overflow:
+						shl_u(intermediateprod, num1, nrShift);
+						add_u(expectedproduct, expectedproduct, intermediateprod);
+						shr_u(intermediateovrf, num1, 512 - nrShift);
+						add_u(expectedoverflow, expectedoverflow, intermediateovrf);
+					};
+				};
+
+
+				alignas(64) u64 prod64[8];
+				alignas(64)u64 ovfl64[8];
+				zero_u(prod64);
+				zero_u(ovfl64);
+				mult_uT64(prod64, &ovfl64[7], num1, num2[7]);
+
+				// Compare 64bit results to calculated expected results (aborts test if they don't match)
+				for (int j = 0; j < 8; j++)
+				{
+					if (expectedproduct[j] != prod64[j]) {
+						Logger::WriteMessage(ToString(j).c_str());
+					};
+					Assert::AreEqual(expectedproduct[j], prod64[j],
+						MSG(L"64 bit Product at " << j << " failed " << i));
+
+
+					if (expectedoverflow[j] != ovfl64[j]) {
+						Logger::WriteMessage(ToString(j).c_str());
+					};
+
+					Assert::AreEqual(expectedoverflow[j], ovfl64[j],
+						MSG(L"64 bit Overflow at " << j << " failed " << i));
+				}
+
+
+				// Got a random multiplicand and multiplier. Execute function under test
+				mult_u(product, overflow, num1, num2);
+
+				// Compare results to expected (aborts test if they don't match)
+				for (int j = 0; j < 8; j++)
+				{
+					if (expectedproduct[j] != product[j]) {
+						Logger::WriteMessage(ToString(j).c_str());
+					};
+					Assert::AreEqual(expectedproduct[j], product[j],
+						MSG(L"Product at " << j << " failed " << i));
+
+
+					if (expectedoverflow[j] != overflow[j]) {
+						Logger::WriteMessage(ToString(j).c_str());
+					};
+
+					Assert::AreEqual(expectedoverflow[j], overflow[j],
+						MSG(L"Overflow at " << j << " failed " << i));
+				}
+			};
+
+			string runmsg4 = "Multiply function testing. Fourth test. Multiply by sums of random powers of two, building ""expected"" 64 bit only; "
+				+ to_string(runcount) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage(runmsg4.c_str());
+			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+
+			// Fifth test, a multiply by sums of random powers of two into a 512 bit value. 
+			// Building "expected" is a bit more complicated. 
+
+			for (int i = 0; i < runcount; i++)
+			{
+				bool rbits[512];
+				std::memset(rbits, 0, sizeof(rbits));
+
+				for (int j = 0; j < 510; j++)
+				{
+					rbits[j] = (RandomU64(&seed) % 2) == 1;
+				};
+
+				for (int j = 7; j >= 0; j--)
+				{
+					num1[j] = RandomU64(&seed);
+				};
+
+				// build multiplier as 'N' number of random bits (avoid duplicate bits)
+				// simultaneously build expected result and overflow
+
+				u16 nrBits = (RandomU64(&seed) % 128) + 2; //  Nr Bits somewhere between 2 and 510? 
+				for (int j = 0; j < nrBits; j++)
+				{
+					zero_u(num2);
+					zero_u(expectedproduct);
+					zero_u(expectedoverflow);
+					zero_u(intermediateprod);
+					zero_u(intermediateovrf);
+
+					// use selected bit to build a random number (through shift/or)
+					// then build expected result of multiply (through shift / add)
+					bool found = false;
+					u16 nrShift = 0;
+					while (nrShift == 0)
+					{
+						u16 rwrd = RandomU64(&seed) % 8;
+						u16 rBit = RandomU64(&seed) % 64;
+						for (u16 idx = rwrd * 64 + rBit; idx < 512; idx++)
+						{
+							u16 wt = idx / 64;
+							u16 bt = idx % 64;
+							u64 msk = 1ull << bt;
+							if (rbits[idx] && !(num2[wt] & msk))
+							{
+								nrShift = idx;
+								found = true;
+								break;
+							}
+						};
+						if (!found)
+						{
+							break;
+						};
+					};
+
+					if (found)
+					{
+						// Multiplier:
+						set_uT64(num3, 1ull);
+						shl_u(num3, num3, nrShift);
+						or_u(num2, num2, num3);
+
+						// Calculate expected product and overflow:
+						shl_u(intermediateprod, num1, nrShift);
+						add_u(expectedproduct, expectedproduct, intermediateprod);
+						shr_u(intermediateovrf, num1, 512 - nrShift);
+						add_u(expectedoverflow, expectedoverflow, intermediateovrf);
+					};
+				};
+
+				// Got a random multiplicand and multiplier. Execute function under test
+				mult_u(product, overflow, num1, num2);
+
+				// Compare results to expected (aborts test if they don't match)
+				for (int j = 0; j < 8; j++)
+				{
+					if (expectedproduct[j] != product[j]) {
+						Logger::WriteMessage(ToString(j).c_str());
+					};
+					Assert::AreEqual(expectedproduct[j], product[j],
+						MSG(L"Product at " << j << " failed " << i));
+
+
+					if (expectedoverflow[j] != overflow[j]) {
+						Logger::WriteMessage(ToString(j).c_str());
+					};
+
+					Assert::AreEqual(expectedoverflow[j], overflow[j],
+						MSG(L"Overflow at " << j << " failed " << i));
+				}
+			};
+
+			string runmsg5 = "Multiply function testing. Fifth test. Multiply two psuedo-random 512-bit variables (use case).  "
+				+ to_string(runcount) + " times.\n";;
+			Logger::WriteMessage(runmsg5.c_str());
 			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 		};
 
@@ -535,171 +707,171 @@ namespace ui512mdTests
 			Logger::WriteMessage(runmsg.c_str());
 		};
 
-		TEST_METHOD(ui512md_03_div)
-		{
-			u64 seed = 0;
-			alignas (64) u64 num1[8]{ 0 };
-			alignas (64) u64 num2[8]{ 0 };
-			alignas (64) u64 dividend[8]{ 0 };
-			alignas (64) u64 divisor[8]{ 0 };
-			alignas (64) u64 expectedquotient[8]{ 0 };
-			alignas (64) u64 expectedremainder[8]{ 0 };
-			alignas (64) u64 quotient[8]{ 0 };
-			alignas (64) u64 remainder[8]{ 0 };
+		//TEST_METHOD(ui512md_03_div)
+		//{
+		//	u64 seed = 0;
+		//	alignas (64) u64 num1[8]{ 0 };
+		//	alignas (64) u64 num2[8]{ 0 };
+		//	alignas (64) u64 dividend[8]{ 0 };
+		//	alignas (64) u64 divisor[8]{ 0 };
+		//	alignas (64) u64 expectedquotient[8]{ 0 };
+		//	alignas (64) u64 expectedremainder[8]{ 0 };
+		//	alignas (64) u64 quotient[8]{ 0 };
+		//	alignas (64) u64 remainder[8]{ 0 };
 
 
-			// First test, a simple divide by two. 
-			// Easy to check as the expected answer is a shift right,
-			// and expected remainder is a shift left
+		//	// First test, a simple divide by two. 
+		//	// Easy to check as the expected answer is a shift right,
+		//	// and expected remainder is a shift left
 
-			for (int i = 0; i < runcount; i++)
-			{
-				for (int j = 0; j < 8; j++)
-				{
-					dividend[j] = RandomU64(&seed);
-				};
+		//	for (int i = 0; i < runcount; i++)
+		//	{
+		//		for (int j = 0; j < 8; j++)
+		//		{
+		//			dividend[j] = RandomU64(&seed);
+		//		};
 
-				zero_u(quotient);
-				set_uT64(divisor, 2);
-				shr_u(expectedquotient, dividend, u16(1));
-				shl_u(expectedremainder, dividend, 511);
-				shr_u(expectedremainder, expectedremainder, 511);
+		//		zero_u(quotient);
+		//		set_uT64(divisor, 2);
+		//		shr_u(expectedquotient, dividend, u16(1));
+		//		shl_u(expectedremainder, dividend, 511);
+		//		shr_u(expectedremainder, expectedremainder, 511);
 
-				div_u(quotient, remainder, dividend, divisor);
+		//		div_u(quotient, remainder, dividend, divisor);
 
-				for (int j = 0; j < 8; j++)
-				{
-					Assert::AreEqual(expectedquotient[j], quotient[j],
-						MSG(L"Quotient at " << j << " failed " << i));
-					Assert::AreEqual(expectedremainder[j], remainder[j],
-						MSG(L"Remainder failed " << i));
-				};
-			};
+		//		for (int j = 0; j < 8; j++)
+		//		{
+		//			Assert::AreEqual(expectedquotient[j], quotient[j],
+		//				MSG(L"Quotient at " << j << " failed " << i));
+		//			Assert::AreEqual(expectedremainder[j], remainder[j],
+		//				MSG(L"Remainder failed " << i));
+		//		};
+		//	};
 
-			string runmsg1 = "Divide function testing. Simple divide by 2 " +
-				to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg1.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
-
-			// Second test, a simple divide by sequential powers of two. 
-			// Still relatively easy to check as expected answer is a shift right,
-			// and expected remainder is a shift left
-
-			for (u16 nrShift = 0; nrShift < 512; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
-			{
-				for (int i = 0; i < runcount / 512; i++)
-				{
-					for (int j = 0; j < 8; j++)
-					{
-						dividend[j] = RandomU64(&seed);
-					};
-
-					set_uT64(divisor, 1);
-					shl_u(divisor, divisor, nrShift);
-					shr_u(expectedquotient, dividend, nrShift);
-					if (nrShift == 0)
-					{
-						zero_u(expectedremainder);
-					}
-					else
-					{
-						u16 shft = 512 - nrShift;
-						shl_u(expectedremainder, dividend, shft);
-						shr_u(expectedremainder, expectedremainder, shft);
-					}
-
-					div_u(quotient, remainder, dividend, divisor);
-
-					for (int j = 0; j < 8; j++)
-					{
-						Assert::AreEqual(expectedquotient[j], quotient[j],
-							MSG(L"Quotient at " << j << " failed " << nrShift << i));
-						Assert::AreEqual(expectedremainder[j], remainder[j],
-							MSG(L"Remainder failed at " << j << " on " << nrShift << " at " << i));
-					}
-
-				};
-			}
-
-			string runmsg2 = "Divide function testing. Divide by sequential powers of 2 "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg2.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
-			//	Use case testing
-			//		Divide number by common use case examples
-
-			int adjruncount = runcount / 64;
-			for (int i = 0; i < adjruncount; i++)
-			{
-				for (int m = 7; m >= 0; m--)
-				{
-					for (int j = 7; j >= 0; j--)
-					{
-						for (int l = 0; l < 8; l++)
-						{
-							num1[l] = RandomU64(&seed);
-							num2[l] = 0;
-							quotient[l] = 0;
-							remainder[l] = 0;
-						};
-						num2[m] = 1;
-						;
-						div_u(quotient, remainder, num1, num2);
+		//	string runmsg1 = "Divide function testing. Simple divide by 2 " +
+		//		to_string(runcount) + " times, each with pseudo random values.\n";;
+		//	Logger::WriteMessage(runmsg1.c_str());
+		//	Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
 
-						for (int v = 7; v >= 0; v--)
-						{
-							int qidx, ridx = 0;
-							u64 qresult, rresult = 0;
+		//	// Second test, a simple divide by sequential powers of two. 
+		//	// Still relatively easy to check as expected answer is a shift right,
+		//	// and expected remainder is a shift left
 
-							qidx = v - (7 - m);
-							qresult = (qidx >= 0) ? qresult = (v >= (7 - m)) ? num1[qidx] : 0ull : qresult = 0;
-							rresult = (v > m) ? num1[v] : 0ull;
+		//	for (u16 nrShift = 0; nrShift < 512; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
+		//	{
+		//		for (int i = 0; i < runcount / 512; i++)
+		//		{
+		//			for (int j = 0; j < 8; j++)
+		//			{
+		//				dividend[j] = RandomU64(&seed);
+		//			};
 
-							Assert::AreEqual(quotient[v], qresult, L"Quotient incorrect");
-							Assert::AreEqual(remainder[v], rresult, L" Remainder incorrect");
-						};
+		//			set_uT64(divisor, 1);
+		//			shl_u(divisor, divisor, nrShift);
+		//			shr_u(expectedquotient, dividend, nrShift);
+		//			if (nrShift == 0)
+		//			{
+		//				zero_u(expectedremainder);
+		//			}
+		//			else
+		//			{
+		//				u16 shft = 512 - nrShift;
+		//				shl_u(expectedremainder, dividend, shft);
+		//				shr_u(expectedremainder, expectedremainder, shft);
+		//			}
 
-						num2[m] = 0;
-					};
-				};
-			};
-			string runmsg = "Divide function testing. Ran tests "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-		};
+		//			div_u(quotient, remainder, dividend, divisor);
 
-		TEST_METHOD(ui512md_03_div_timing)
-		{
-			// Timing test. Eliminate everything but execution of the subject function
-			// other than set-up, and messaging complete.
+		//			for (int j = 0; j < 8; j++)
+		//			{
+		//				Assert::AreEqual(expectedquotient[j], quotient[j],
+		//					MSG(L"Quotient at " << j << " failed " << nrShift << i));
+		//				Assert::AreEqual(expectedremainder[j], remainder[j],
+		//					MSG(L"Remainder failed at " << j << " on " << nrShift << " at " << i));
+		//			}
 
-			u64 seed = 0;
-			alignas (64) u64 dividend[8]{ 0 };
-			alignas (64) u64 quotient[8]{ 0 };
-			alignas (64) u64 divisor[8]{ 0 };
-			alignas (64) u64 remainder[8]{ 0 };
+		//		};
+		//	}
 
-			for (int i = 0; i < 8; i++)
-			{
-				dividend[i] = RandomU64(&seed);
-				divisor[i] = RandomU64(&seed);
-			}
-			zero_u(quotient);
-			zero_u(remainder);
+		//	string runmsg2 = "Divide function testing. Divide by sequential powers of 2 "
+		//		+ to_string(runcount) + " times, each with pseudo random values.\n";;
+		//	Logger::WriteMessage(runmsg2.c_str());
+		//	Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
-			for (int i = 0; i < timingcount; i++)
-			{
-				div_u(quotient, remainder, dividend, divisor);
-			};
+		//	//	Use case testing
+		//	//		Divide number by common use case examples
 
-			string runmsg = "Divide function timing. Ran "
-				+ to_string(timingcount) + " times.\n";
-			Logger::WriteMessage(runmsg.c_str());
-		};
+		//	int adjruncount = runcount / 64;
+		//	for (int i = 0; i < adjruncount; i++)
+		//	{
+		//		for (int m = 7; m >= 0; m--)
+		//		{
+		//			for (int j = 7; j >= 0; j--)
+		//			{
+		//				for (int l = 0; l < 8; l++)
+		//				{
+		//					num1[l] = RandomU64(&seed);
+		//					num2[l] = 0;
+		//					quotient[l] = 0;
+		//					remainder[l] = 0;
+		//				};
+		//				num2[m] = 1;
+		//				;
+		//				div_u(quotient, remainder, num1, num2);
+
+
+		//				for (int v = 7; v >= 0; v--)
+		//				{
+		//					int qidx, ridx = 0;
+		//					u64 qresult, rresult = 0;
+
+		//					qidx = v - (7 - m);
+		//					qresult = (qidx >= 0) ? qresult = (v >= (7 - m)) ? num1[qidx] : 0ull : qresult = 0;
+		//					rresult = (v > m) ? num1[v] : 0ull;
+
+		//					Assert::AreEqual(quotient[v], qresult, L"Quotient incorrect");
+		//					Assert::AreEqual(remainder[v], rresult, L" Remainder incorrect");
+		//				};
+
+		//				num2[m] = 0;
+		//			};
+		//		};
+		//	};
+		//	string runmsg = "Divide function testing. Ran tests "
+		//		+ to_string(runcount) + " times, each with pseudo random values.\n";;
+		//	Logger::WriteMessage(runmsg.c_str());
+		//	Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+		//};
+
+		//TEST_METHOD(ui512md_03_div_timing)
+		//{
+		//	// Timing test. Eliminate everything but execution of the subject function
+		//	// other than set-up, and messaging complete.
+
+		//	u64 seed = 0;
+		//	alignas (64) u64 dividend[8]{ 0 };
+		//	alignas (64) u64 quotient[8]{ 0 };
+		//	alignas (64) u64 divisor[8]{ 0 };
+		//	alignas (64) u64 remainder[8]{ 0 };
+
+		//	for (int i = 0; i < 8; i++)
+		//	{
+		//		dividend[i] = RandomU64(&seed);
+		//		divisor[i] = RandomU64(&seed);
+		//	}
+		//	zero_u(quotient);
+		//	zero_u(remainder);
+
+		//	for (int i = 0; i < timingcount; i++)
+		//	{
+		//		div_u(quotient, remainder, dividend, divisor);
+		//	};
+
+		//	string runmsg = "Divide function timing. Ran "
+		//		+ to_string(timingcount) + " times.\n";
+		//	Logger::WriteMessage(runmsg.c_str());
+		//};
 		TEST_METHOD(ui512md_04_div64)
 		{
 			u64 seed = 0;
