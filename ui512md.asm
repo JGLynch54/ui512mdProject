@@ -88,7 +88,8 @@ mult_u			PROC			PUBLIC
 				LOCAL			candl : WORD						; low limit index of multiplicand
 				LOCAL			padding2 [ 16 ] : QWORD
 mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local memmory declarations
-				CreateFrame		300h, savedRBP
+
+				CreateFrame		220h, savedRBP
 				MOV				savedRCX, RCX
 				MOV				savedRDX, RDX
 				MOV				savedR10, R10
@@ -177,10 +178,10 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 
 ; zero callers product and overflow
 @@zeroandexit:
-				MOV				RCX, savedRCX
-				Zero512			RCX
-				MOV				RCX, savedRDX
-				Zero512			RCX
+				MOV				RCX, savedRCX					; reload address of callers product
+				Zero512			RCX								; zero it
+				MOV				RCX, savedRDX					; reload address of caller overflow
+				Zero512			RCX								; zero it
 				JMP				@@exit
 
 ; multiplying by 1: zero overflow, copy the non-one to the product
@@ -214,7 +215,7 @@ mult_uT64	PROC			PUBLIC
 			LOCAL			padding2 [ 8 ] :QWORD
 mult64_oset	EQU				padding2 + 64 - padding1
 
-			CreateFrame		200h, savedRBP
+			CreateFrame		120h, savedRBP
 			MOV				savedRCX, RCX
 			MOV				savedRDX, RDX
 
@@ -224,35 +225,35 @@ mult64_oset	EQU				padding2 + 64 - padding1
 			MOV				overflow, RAX
 			;
 	
-			MOV				RAX, [ R8 ] + [ 7 * 8 ]			; multiplicand 8th qword
+			MOV				RAX, [ R8 + 7 * 8 ]			; multiplicand 8th qword
 			MUL				R9								; times multiplier
 			ADD				product [ 7 * 8 ], RAX			; to working product 8th word
 			ADC				product [ 6 * 8 ], RDX			; 'overflow' to 7th qword of working product
-			MOV				RAX, [ R8 ] + [ 6 * 8 ]			; 7th
+			MOV				RAX, [ R8 + 6 * 8 ]			; 7th
 			MUL				R9
 			ADD				product [ 6 * 8 ], RAX			
 			ADC				product [ 5 * 8 ], RDX
-			MOV				RAX, [ R8 ] + [ 5 * 8 ]			; 6th
+			MOV				RAX, [ R8 + 5 * 8 ]			; 6th
 			MUL				R9
 			ADD				product [ 5 * 8 ], RAX			
 			ADC				product [ 4 * 8 ], RDX
-			MOV				RAX, [ R8 ] + [ 4 * 8 ]			; 5th
+			MOV				RAX, [ R8 + 4 * 8 ]			; 5th
 			MUL				R9
 			ADD				product [ 4 * 8 ], RAX			
 			ADC				product [ 3 * 8 ], RDX
-			MOV				RAX, [ R8 ] + [ 3 * 8 ]			; 4th
+			MOV				RAX, [ R8 + 3 * 8 ]			; 4th
 			MUL				R9
 			ADD				product [ 3 * 8 ], RAX			
 			ADC				product [ 2 * 8 ], RDX
-			MOV				RAX, [ R8 ] + [ 2 * 8 ]			; 3rd
+			MOV				RAX, [ R8 + 2 * 8 ]			; 3rd
 			MUL				R9
 			ADD				product [ 2 * 8 ], RAX			
 			ADC				product [ 1 * 8 ], RDX
-			MOV				RAX, [ R8 ] + [ 1 * 8 ]			; 2nd
+			MOV				RAX, [ R8 + 1 * 8 ]			; 2nd
 			MUL				R9
 			ADD				product [ 1 * 8 ], RAX			
 			ADC				product [ 0 * 8 ], RDX
-			MOV				RAX, [ R8 ] + [ 0 * 8 ]			; 1st
+			MOV				RAX, [ R8 + 0 * 8 ]			; 1st
 			MUL				R9
 			ADD				product [ 0 * 8 ], RAX
 			ADC				overflow, RDX					; last qword overflow is also the operation overflow
@@ -468,7 +469,7 @@ cleanupret:
 exit:
 			RET
 divbyzero:
-			MOV				AX, -1
+			MOV				EAX, ret_1
 			JMP				exit
 
 div_u		ENDP
@@ -527,7 +528,7 @@ div_uT64	PROC			PUBLIC
 			Zero512			RCX								; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
 			XOR				RAX, RAX
 			MOV				Q_PTR [ R10 ] , RAX				;
-			MOV				AX, -1							; return error (div by zero)
+			MOV				EAX, ret_1							; return error (div by zero)
 			JMP				@@exit
 div_uT64	ENDP
 

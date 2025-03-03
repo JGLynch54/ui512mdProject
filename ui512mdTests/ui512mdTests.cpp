@@ -269,37 +269,32 @@ namespace ui512mdTests
 					rbits[j] = (RandomU64(&seed) % 2) == 1;
 				};
 
-				for (int j = 0; j < 8; j++)
+				for (int j = 7; j >= 0; j--)
 				{
 					num1[j] = RandomU64(&seed);
 				};
 
-				set_uT64(num1, (u64)2);
-				zero_u(num2);
-				zero_u(expectedproduct);
-				zero_u(expectedoverflow);
-				zero_u(work);
-
 				// build multiplier as 'N' number of random bits (avoid duplicate bits)
 				// simultaneously build expected result and overflow
 
-				u16 nrBits = (RandomU64(&seed) % 24) + 2; //  Nr Bits somewhere between 2 and 510? 
+				zero_u(num2);
+				zero_u(expectedproduct);
+				zero_u(expectedoverflow);
+
+				u16 nrBits = (RandomU64(&seed) % 36) + 2; //  Nr Bits somewhere between 2 and 36? 
 				for (int j = 0; j < nrBits; j++)
 				{
 					zero_u(intermediateprod);
 					zero_u(intermediateovrf);
-
 					// use selected bit to build a random number (through shift/or)
 					// then build expected result of multiply (through shift / add)
 					bool found = false;
 					u16 nrShift = 0;
-					while (nrShift == 0)
+					while ((nrShift == 0) && !found)
 					{
-						//	u16 rwrd = RandomU64(&seed) % 8;
 						u16 rBit = RandomU64(&seed) % 64;
 						for (u16 idx = rBit; idx < 64; idx++)
 						{
-							//u16 wt = idx / 64;
 							u16 bt = idx % 64;
 							u64 msk = 1ull << bt;
 							if (rbits[idx] && !(num2[7] & msk))
@@ -318,16 +313,19 @@ namespace ui512mdTests
 					if (found)
 					{
 						// Multiplier:
-						num3[7] = 1ull;
-						//set_uT64(num3, 1ull);
+						set_uT64(num3, 1ull);
 						shl_u(num3, num3, nrShift);
 						or_u(num2, num2, num3);
 
 						// Calculate expected product and overflow:
 						shl_u(intermediateprod, num1, nrShift);
-						add_u(expectedproduct, expectedproduct, intermediateprod);
+						s16 prad = add_u(expectedproduct, expectedproduct, intermediateprod);
 						shr_u(intermediateovrf, num1, 512 - nrShift);
-						add_u(expectedoverflow, expectedoverflow, intermediateovrf);
+						if (prad == 1)
+						{
+							add_uT64(intermediateovrf, intermediateovrf, 1ull);
+						};
+						s16 ofad = add_u(expectedoverflow, expectedoverflow, intermediateovrf);
 					};
 				};
 
@@ -418,7 +416,7 @@ namespace ui512mdTests
 					// then build expected result of multiply (through shift / add)
 					bool found = false;
 					u16 nrShift = 0;
-					while (nrShift == 0)
+					while ((nrShift == 0) && !found)
 					{
 						u16 rwrd = RandomU64(&seed) % 8;
 						u16 rBit = RandomU64(&seed) % 64;

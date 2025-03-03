@@ -105,9 +105,6 @@ EXTERNDEF		sub_u:PROC
 EXTERNDEF		sub_uT64:PROC
 
 ;			Configuration choices
-__PrefZ			EQU				0									; Load into Z, operate with no memory fetch / store un til done
-__PrefQ			EQU				0									; Load data into sequence of regs (requires push/pop save/restore)
-;
 __UseZ			EQU				1									; Use AVX4 processor features (512 bit registers and instructions)
 __UseY			EQU				0									; Use AVX2 processor features (256 bit registers and instructions)
 __UseX			EQU				0									; Use SIMD/SSE processor features (128 bit registers and instructions)
@@ -131,9 +128,11 @@ m64BCST			EQU				QWORD BCST
 CPEQ			EQU				0
 CPLT			EQU				1
 CPLE			EQU				2
+CPFALSE			EQU				3
 CPNE			EQU				4
 CPGE			EQU				5
 CPGT			EQU				6
+CPTRUE			EQU				7
 
 ;			Mask values (for k reg) used to select particulare QWORDS from X, Y, or Z simd regs
 MaskBit0		EQU				B_PTR [ 00000001b ]
@@ -144,6 +143,8 @@ MaskBit4		EQU				B_PTR [ 00010000b ]
 MaskBit5		EQU				B_PTR [ 00100000b ]
 MaskBit6		EQU				B_PTR [ 01000000b ]
 MaskBit7		EQU				B_PTR [ 10000000b ]
+
+Mask20			EQU
 ;==========================================================================================
 ;           Notes on x64 calling conventions        aka "fast call"
 ; ref: https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
@@ -201,7 +202,9 @@ mskB4			DB				16
 mskB5			DB				32
 mskB6			DB				64
 mskB7			DB				128
+mskHex100		DD				0100h
 				ENDM
+
 ;
 ;			Zero a 512 bit destination, conditional assembly based on configuration parameters
 ;
