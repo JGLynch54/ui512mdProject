@@ -223,40 +223,22 @@ mult64_oset		EQU				padding2 + 64 - padding1
 				Zero512			RCX									; clear working copy of product and overflow
 				XOR				RAX, RAX
 				MOV				overflow, RAX
-;
-				MOV				RAX, [ R8 + 7 * 8 ]					; multiplicand 8th qword
-				MUL				R9									; times multiplier
-				ADD				product [ 7 * 8 ], RAX				; to working product 8th word
-				ADC				product [ 6 * 8 ], RDX				; 'overflow' to 7th qword of working product
-				MOV				RAX, [ R8 + 6 * 8 ]					; 7th
-				MUL				R9
-				ADD				product [ 6 * 8 ], RAX			
-				ADC				product [ 5 * 8 ], RDX
-				MOV				RAX, [ R8 + 5 * 8 ]					; 6th
-				MUL				R9
-				ADD				product [ 5 * 8 ], RAX			
-				ADC				product [ 4 * 8 ], RDX
-				MOV				RAX, [ R8 + 4 * 8 ]					; 5th
-				MUL				R9
-				ADD				product [ 4 * 8 ], RAX			
-				ADC				product [ 3 * 8 ], RDX
-				MOV				RAX, [ R8 + 3 * 8 ]					; 4th
-				MUL				R9
-				ADD				product [ 3 * 8 ], RAX			
-				ADC				product [ 2 * 8 ], RDX
-				MOV				RAX, [ R8 + 2 * 8 ]					; 3rd
-				MUL				R9
-				ADD				product [ 2 * 8 ], RAX			
-				ADC				product [ 1 * 8 ], RDX
-				MOV				RAX, [ R8 + 1 * 8 ]					; 2nd
-				MUL				R9
-				ADD				product [ 1 * 8 ], RAX			
-				ADC				product [ 0 * 8 ], RDX
+
+; FOR EACH index of 7 thru 1 (ommiting 0): fetch qword of multiplicand, multiply, add 128 bit (RAX,RDX) to running working product
+				FOR				idx, <7, 6, 5, 4, 3, 2, 1>
+				MOV				RAX, [ R8 + idx * 8 ]				; multiplicand [ idx ] qword -> RAX
+				MUL				R9									; times multiplier -> RAX, RDX
+				ADD				product [ idx * 8 ], RAX			; add RAX to working product [ idx ] word
+				ADC				product [ (idx - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+				ENDM
+
+; Most significant (idx=0), the high order result of the multiply in RDX, goes to the overflow of the caller
 				MOV				RAX, [ R8 + 0 * 8 ]					; 1st
 				MUL				R9
 				ADD				product [ 0 * 8 ], RAX
 				ADC				overflow, RDX						; last qword overflow is also the operation overflow
 
+; clean up, restore, send results back, return
 				MOV				RCX, savedRCX						; send results back to caller
 				LEA				RDX, product
 				Copy512			RCX, RDX
@@ -287,21 +269,12 @@ div_u			PROC			PUBLIC
 
 				LOCAL			padding1 [ 8 ] : QWORD
 				LOCAL			currnumerator [ 16 ] : QWORD
-				LOCAL			qdiv [ 8 ] : QWORD			
-				LOCAL			quotient [ 8 ] : QWORD
-				LOCAL			normdivisor [ 8 ] : QWORD
+				LOCAL			qdiv [ 8 ] : QWORD, quotient [ 8 ] : QWORD, normdivisor [ 8 ] : QWORD
 				LOCAL			savedRBP : QWORD
 				LOCAL			savedRCX : QWORD, savedRDX : QWORD, savedR8 : QWORD, savedR9 : QWORD
 				LOCAL			savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD
-				LOCAL			qHat : QWORD
-				LOCAL			rHat : QWORD
-				LOCAL			qovf : QWORD
-				LOCAL			currenumbegin : QWORD
-				LOCAL			normf : WORD
-				LOCAL			limEnumIdx : WORD
-				LOCAL			jIdx: WORD
-				LOCAL			dimM: WORD
-				LOCAL			dimN: WORD
+				LOCAL			qHat : QWORD, rHat : QWORD,	qovf : QWORD
+				LOCAL			normf : WORD, jIdx : WORD, dimM : WORD, dimN : WORD
 			
 				LOCAL			padding2 [ 16 ] : QWORD
 div_oset		EQU				padding2 + 64 - padding1
@@ -348,10 +321,15 @@ div_oset		EQU				padding2 + 64 - padding1
 mbynDiv:
 				MOV				dimN, AX							; still have divisor msb in AX
 				SHL				dimN, 6								; div msb by 6 to get msq (most significant qword) aka 'n'
-				MOV				normf, 64
-				SUB				normf, AX							; Nr bits to get leading divisor bit to msb saved at normf			
+				MOV				normf, AX
+				OR				normf, 63
+				MOV				AX, 7
+				SUB				AX, dimN
+				MOV				dimN, AX
+				MOV				AX, 63
+				SUB				AX, normf							; Nr bits to get leading divisor bit to msb saved at normf
+				MOV				normf, AX
 				XOR				RAX, RAX
-				MOV				dimM, AX
 @@:
 				INC				dimM
 				CMP				dimM, 8
@@ -360,6 +338,10 @@ mbynDiv:
 				LEA				R8, 8 [ R8 ]
 				JZ				@B
 				DEC				dimM								; now have dimensions of divisor (v) which is dimN, and dividend (u) which is dimM
+				MOV				AX, 7
+				SUB				AX, dimM
+				MOV				dimM, AX
+				MOV				jIdx, AX							; Index of quotient digit, also counter to zero and done with divide
 
 ; Step D1: Normalize	
 				
@@ -372,62 +354,28 @@ mbynDiv:
 				LEA				RCX, currnumerator [ 8 * 8 ]		; starting numerator is the normalized supplied dividend
 				MOV				R8W, normf
 				CALL			shl_u
+				CMP				dimM, 0
+				JG				@F
+				LEA				RDX, currnumerator					; zero first eight words of working enumerator
+				Zero512			RDX
 				MOV				RDX, savedR8
-				LEA				RCX, currnumerator [ 0 * 8 ]
-				MOV				R8W, 64
-				SUB				R8W, normf
-				CALL			shr_u								; now have up to 16 word bit-shifted dividend in 'enumerator'
-				LEA				RCX, currnumerator
-@@:
-				MOV				currenumbegin, RCX					; set address of the first non-zero word of the dividend (enumerator)
-				MOV				RDX, [ RCX ]
-				TEST			RDX, RDX
-				LEA				RCX, [ RCX + 8 ]
-				JZ				@B
-				MOVZX			RCX, normf
-				SHR				CX, 4
-				MOV				limEnumIdx, CX
-;			Step D2: Initialize
-				XOR				RAX, RAX
-				MOV				jIdx, AX
+				MOV				RAX, [ RDX ]						; if numerator has 8 qwords (dimM = 7), then the shift just lost us high order bits, get them			
+				MOV				CX, normf
+				SHR				RAX, CL
+				MOV				currnumerator [ 7 * 8 ], RAX		; store them at m + 1 (the word 'before' the other eight qwords)
 
-;			Step D3: Calculate  q^
+@@:
+;			Step D3: Calculate  q^D3:
 D3:
-				XOR				RDX, RDX							; DIV takes 128 bits, RDX the high 64, RAX the low
-				MOVZX			RAX, jIdx
-				MOV				RCX, currenumbegin
-				LEA				RCX, [ RCX + RAX * 8 ]
-				MOV				RDX, [ RCX ]
-				MOV				RAX, [ RCX + 8 ]
+				MOVZX			RCX, jIdx
+				LEA				R8, currnumerator [ 7 * 8 ]
+				MOV				RDX, [R8 + [ RCX * 8 ] ]				; DIV takes 128 bits, RDX the high 64, RAX the low
+				INC				RCX
+				MOV				RAX, [R8 + [ RCX * 8] ]
 				MOV				RCX, normdivisor
 				DIV				RCX
 				MOV				qHat, RAX
 				MOV				rHat, RDX
-;			test q^
-@retest:
-				TEST			RAX, RAX							; q^ = b? (2^64)
-				JZ				@adj
-				MUL				normdivisor [ 1 * 8 ]
-				MOVZX			RCX, jIdx
-				MOV				R8, currenumbegin
-				MOV				RCX, [ R8 + RCX * 8 + 16]
-				ADD				RCX, rHat
-				JC				@5
-				CMP				RAX, RCX
-				JG				@adj
-@5:				CMP				RDX, 1
-				JG				@adj
-				CMP				RAX, RCX
-				JLE				D4
-@adj:
-				MOV				RAX, qHat
-				DEC				RAX
-				MOV				qHat, RAX
-				MOV				RAX, RCX
-				ADD				RAX, rHat
-				MOV				rHat, RAX
-				MOV				RAX, qHat
-				JNC				@retest
 
 ;			Step D4: Multiply and Subtract
 D4:
@@ -447,6 +395,22 @@ D4:
 				CMP				R12, 8 * 8
 				JL				D3
 
+; Step D5: Test remainder
+D5:
+				MOVZX				RCX, jIdx
+				MOV				RAX, qHat
+				MOV				quotient [ RCX * 8 ], RAX
+
+; Step D6: Add Back
+D6:
+
+; Step D7: Loop on j
+D7:
+				INC				jIdx
+				TEST			jIdx, 8
+				JL				D3
+
+; Step D8: Un Normalize:
 D8UnNormalize:
 				MOV				RCX, savedRDX						; reduced working numerator is now the remainder
 				LEA				RDX, currnumerator					; copy to callers remainder
@@ -489,35 +453,22 @@ div_u			ENDP
 				OPTION			EPILOGUE:none
 div_uT64		PROC			PUBLIC
 
+; Test divisor for divide by zero				
 				TEST			R9, R9
 				JZ				@@DivByZero
-				;
+
+; DIV instruction (64-bit) uses RAX and RDX. Need to move RDX (addr of remainder) out of the way; start it off with zero
 				MOV				R10, RDX
 				XOR				RDX, RDX
-				MOV				RAX, Q_PTR [ R8 + 0 * 8 ]			; Dividend first word
-				DIV				R9									; Divisor
-				MOV				Q_PTR [ RCX + 0 * 8 ], RAX			; Quotient to callers quotient first word; Div moved remainder to RDX
-				MOV				RAX, Q_PTR [ R8 + 1 * 8 ]			; 2nd
-				DIV				R9
-				MOV				Q_PTR [ RCX + 1 * 8 ], RAX
-				MOV				RAX, Q_PTR [ R8 + 2 * 8 ]			; 3rd
-				DIV				R9
-				MOV				Q_PTR [ RCX + 2 * 8 ], RAX
-				MOV				RAX, Q_PTR [ R8 + 3 * 8 ]			; 4th
-				DIV				R9
-				MOV				Q_PTR [ RCX + 3 * 8 ], RAX
-				MOV				RAX, Q_PTR [ R8 + 4 * 8 ]			; 5th
-				DIV				R9
-				MOV				Q_PTR [ RCX + 4 * 8 ], RAX
-				MOV				RAX, Q_PTR [ R8 + 5 * 8 ]			; 6th
-				DIV				R9
-				MOV				Q_PTR [ RCX + 5 * 8 ], RAX
-				MOV				RAX, Q_PTR [ R8 + 6 * 8 ]			; 7th
-				DIV				R9
-				MOV				Q_PTR [ RCX + 6 * 8 ], RAX			; 8th and final
-				MOV				RAX, Q_PTR [ R8 + 7 * 8 ]
-				DIV				R9
-				MOV				Q_PTR [ RCX + 7 * 8 ], RAX
+
+; FOR EACH index of 0 thru 7: get qword of dividend, divide by divisor, store qword of quotient
+				FOR				idx, <0,1,2,3,4,5,6,7>
+				MOV				RAX, Q_PTR [ R8 + idx * 8 ]			; dividend [ idx ] -> RAX
+				DIV				R9									; divide by divisor in R9
+				MOV				Q_PTR [ RCX + idx * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+				ENDM
+
+; Last (least significant qword) divide leaves a remainder, store it at callers remainder
 				MOV				Q_PTR [ R10 ], RDX					; remainder to callers remainder
 				XOR				RAX, RAX							; return zero
 @@exit:			

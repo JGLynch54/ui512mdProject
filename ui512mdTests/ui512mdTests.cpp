@@ -705,171 +705,171 @@ namespace ui512mdTests
 			Logger::WriteMessage(runmsg.c_str());
 		};
 
-		//TEST_METHOD(ui512md_03_div)
-		//{
-		//	u64 seed = 0;
-		//	alignas (64) u64 num1[8]{ 0 };
-		//	alignas (64) u64 num2[8]{ 0 };
-		//	alignas (64) u64 dividend[8]{ 0 };
-		//	alignas (64) u64 divisor[8]{ 0 };
-		//	alignas (64) u64 expectedquotient[8]{ 0 };
-		//	alignas (64) u64 expectedremainder[8]{ 0 };
-		//	alignas (64) u64 quotient[8]{ 0 };
-		//	alignas (64) u64 remainder[8]{ 0 };
+		TEST_METHOD(ui512md_03_div)
+		{
+			u64 seed = 0;
+			alignas (64) u64 num1[8]{ 0 };
+			alignas (64) u64 num2[8]{ 0 };
+			alignas (64) u64 dividend[8]{ 0 };
+			alignas (64) u64 divisor[8]{ 0 };
+			alignas (64) u64 expectedquotient[8]{ 0 };
+			alignas (64) u64 expectedremainder[8]{ 0 };
+			alignas (64) u64 quotient[8]{ 0 };
+			alignas (64) u64 remainder[8]{ 0 };
 
 
-		//	// First test, a simple divide by two. 
-		//	// Easy to check as the expected answer is a shift right,
-		//	// and expected remainder is a shift left
+			// First test, a simple divide by two. 
+			// Easy to check as the expected answer is a shift right,
+			// and expected remainder is a shift left
 
-		//	for (int i = 0; i < runcount; i++)
-		//	{
-		//		for (int j = 0; j < 8; j++)
-		//		{
-		//			dividend[j] = RandomU64(&seed);
-		//		};
+			for (int i = 0; i < runcount; i++)
+			{
+				for (int j = 0; j < 8; j++)
+				{
+					dividend[j] = RandomU64(&seed);
+				};
 
-		//		zero_u(quotient);
-		//		set_uT64(divisor, 2);
-		//		shr_u(expectedquotient, dividend, u16(1));
-		//		shl_u(expectedremainder, dividend, 511);
-		//		shr_u(expectedremainder, expectedremainder, 511);
+				zero_u(quotient);
+				set_uT64(divisor, 2);
+				shr_u(expectedquotient, dividend, u16(1));
+				shl_u(expectedremainder, dividend, 511);
+				shr_u(expectedremainder, expectedremainder, 511);
 
-		//		div_u(quotient, remainder, dividend, divisor);
+				div_u(quotient, remainder, dividend, divisor);
 
-		//		for (int j = 0; j < 8; j++)
-		//		{
-		//			Assert::AreEqual(expectedquotient[j], quotient[j],
-		//				MSG(L"Quotient at " << j << " failed " << i));
-		//			Assert::AreEqual(expectedremainder[j], remainder[j],
-		//				MSG(L"Remainder failed " << i));
-		//		};
-		//	};
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedquotient[j], quotient[j],
+						MSG(L"Quotient at " << j << " failed " << i));
+					Assert::AreEqual(expectedremainder[j], remainder[j],
+						MSG(L"Remainder failed " << i));
+				};
+			};
 
-		//	string runmsg1 = "Divide function testing. Simple divide by 2 " +
-		//		to_string(runcount) + " times, each with pseudo random values.\n";;
-		//	Logger::WriteMessage(runmsg1.c_str());
-		//	Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
-
-		//	// Second test, a simple divide by sequential powers of two. 
-		//	// Still relatively easy to check as expected answer is a shift right,
-		//	// and expected remainder is a shift left
-
-		//	for (u16 nrShift = 0; nrShift < 512; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
-		//	{
-		//		for (int i = 0; i < runcount / 512; i++)
-		//		{
-		//			for (int j = 0; j < 8; j++)
-		//			{
-		//				dividend[j] = RandomU64(&seed);
-		//			};
-
-		//			set_uT64(divisor, 1);
-		//			shl_u(divisor, divisor, nrShift);
-		//			shr_u(expectedquotient, dividend, nrShift);
-		//			if (nrShift == 0)
-		//			{
-		//				zero_u(expectedremainder);
-		//			}
-		//			else
-		//			{
-		//				u16 shft = 512 - nrShift;
-		//				shl_u(expectedremainder, dividend, shft);
-		//				shr_u(expectedremainder, expectedremainder, shft);
-		//			}
-
-		//			div_u(quotient, remainder, dividend, divisor);
-
-		//			for (int j = 0; j < 8; j++)
-		//			{
-		//				Assert::AreEqual(expectedquotient[j], quotient[j],
-		//					MSG(L"Quotient at " << j << " failed " << nrShift << i));
-		//				Assert::AreEqual(expectedremainder[j], remainder[j],
-		//					MSG(L"Remainder failed at " << j << " on " << nrShift << " at " << i));
-		//			}
-
-		//		};
-		//	}
-
-		//	string runmsg2 = "Divide function testing. Divide by sequential powers of 2 "
-		//		+ to_string(runcount) + " times, each with pseudo random values.\n";;
-		//	Logger::WriteMessage(runmsg2.c_str());
-		//	Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
-		//	//	Use case testing
-		//	//		Divide number by common use case examples
-
-		//	int adjruncount = runcount / 64;
-		//	for (int i = 0; i < adjruncount; i++)
-		//	{
-		//		for (int m = 7; m >= 0; m--)
-		//		{
-		//			for (int j = 7; j >= 0; j--)
-		//			{
-		//				for (int l = 0; l < 8; l++)
-		//				{
-		//					num1[l] = RandomU64(&seed);
-		//					num2[l] = 0;
-		//					quotient[l] = 0;
-		//					remainder[l] = 0;
-		//				};
-		//				num2[m] = 1;
-		//				;
-		//				div_u(quotient, remainder, num1, num2);
+			string runmsg1 = "Divide function testing. Simple divide by 2 " +
+				to_string(runcount) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage(runmsg1.c_str());
+			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
 
-		//				for (int v = 7; v >= 0; v--)
-		//				{
-		//					int qidx, ridx = 0;
-		//					u64 qresult, rresult = 0;
+			// Second test, a simple divide by sequential powers of two. 
+			// Still relatively easy to check as expected answer is a shift right,
+			// and expected remainder is a shift left
 
-		//					qidx = v - (7 - m);
-		//					qresult = (qidx >= 0) ? qresult = (v >= (7 - m)) ? num1[qidx] : 0ull : qresult = 0;
-		//					rresult = (v > m) ? num1[v] : 0ull;
+			for (u16 nrShift = 0; nrShift < 512; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
+			{
+				for (int i = 0; i < runcount / 512; i++)
+				{
+					for (int j = 0; j < 8; j++)
+					{
+						dividend[j] = RandomU64(&seed);
+					};
 
-		//					Assert::AreEqual(quotient[v], qresult, L"Quotient incorrect");
-		//					Assert::AreEqual(remainder[v], rresult, L" Remainder incorrect");
-		//				};
+					set_uT64(divisor, 1);
+					shl_u(divisor, divisor, nrShift);
+					shr_u(expectedquotient, dividend, nrShift);
+					if (nrShift == 0)
+					{
+						zero_u(expectedremainder);
+					}
+					else
+					{
+						u16 shft = 512 - nrShift;
+						shl_u(expectedremainder, dividend, shft);
+						shr_u(expectedremainder, expectedremainder, shft);
+					}
 
-		//				num2[m] = 0;
-		//			};
-		//		};
-		//	};
-		//	string runmsg = "Divide function testing. Ran tests "
-		//		+ to_string(runcount) + " times, each with pseudo random values.\n";;
-		//	Logger::WriteMessage(runmsg.c_str());
-		//	Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-		//};
+					div_u(quotient, remainder, dividend, divisor);
 
-		//TEST_METHOD(ui512md_03_div_timing)
-		//{
-		//	// Timing test. Eliminate everything but execution of the subject function
-		//	// other than set-up, and messaging complete.
+					for (int j = 0; j < 8; j++)
+					{
+						Assert::AreEqual(expectedquotient[j], quotient[j],
+							MSG(L"Quotient at " << j << " failed " << nrShift << i));
+						Assert::AreEqual(expectedremainder[j], remainder[j],
+							MSG(L"Remainder failed at " << j << " on " << nrShift << " at " << i));
+					}
 
-		//	u64 seed = 0;
-		//	alignas (64) u64 dividend[8]{ 0 };
-		//	alignas (64) u64 quotient[8]{ 0 };
-		//	alignas (64) u64 divisor[8]{ 0 };
-		//	alignas (64) u64 remainder[8]{ 0 };
+				};
+			}
 
-		//	for (int i = 0; i < 8; i++)
-		//	{
-		//		dividend[i] = RandomU64(&seed);
-		//		divisor[i] = RandomU64(&seed);
-		//	}
-		//	zero_u(quotient);
-		//	zero_u(remainder);
+			string runmsg2 = "Divide function testing. Divide by sequential powers of 2 "
+				+ to_string(runcount) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage(runmsg2.c_str());
+			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
-		//	for (int i = 0; i < timingcount; i++)
-		//	{
-		//		div_u(quotient, remainder, dividend, divisor);
-		//	};
+			//	Use case testing
+			//		Divide number by common use case examples
 
-		//	string runmsg = "Divide function timing. Ran "
-		//		+ to_string(timingcount) + " times.\n";
-		//	Logger::WriteMessage(runmsg.c_str());
-		//};
+			int adjruncount = runcount / 64;
+			for (int i = 0; i < adjruncount; i++)
+			{
+				for (int m = 7; m >= 0; m--)
+				{
+					for (int j = 7; j >= 0; j--)
+					{
+						for (int l = 0; l < 8; l++)
+						{
+							num1[l] = RandomU64(&seed);
+							num2[l] = 0;
+							quotient[l] = 0;
+							remainder[l] = 0;
+						};
+						num2[m] = 1;
+						;
+						div_u(quotient, remainder, num1, num2);
+
+
+						for (int v = 7; v >= 0; v--)
+						{
+							int qidx, ridx = 0;
+							u64 qresult, rresult = 0;
+
+							qidx = v - (7 - m);
+							qresult = (qidx >= 0) ? qresult = (v >= (7 - m)) ? num1[qidx] : 0ull : qresult = 0;
+							rresult = (v > m) ? num1[v] : 0ull;
+
+							Assert::AreEqual(quotient[v], qresult, L"Quotient incorrect");
+							Assert::AreEqual(remainder[v], rresult, L" Remainder incorrect");
+						};
+
+						num2[m] = 0;
+					};
+				};
+			};
+			string runmsg = "Divide function testing. Ran tests "
+				+ to_string(runcount) + " times, each with pseudo random values.\n";;
+			Logger::WriteMessage(runmsg.c_str());
+			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+		};
+
+		TEST_METHOD(ui512md_03_div_timing)
+		{
+			// Timing test. Eliminate everything but execution of the subject function
+			// other than set-up, and messaging complete.
+
+			u64 seed = 0;
+			alignas (64) u64 dividend[8]{ 0 };
+			alignas (64) u64 quotient[8]{ 0 };
+			alignas (64) u64 divisor[8]{ 0 };
+			alignas (64) u64 remainder[8]{ 0 };
+
+			for (int i = 0; i < 8; i++)
+			{
+				dividend[i] = RandomU64(&seed);
+				divisor[i] = RandomU64(&seed);
+			}
+			zero_u(quotient);
+			zero_u(remainder);
+
+			for (int i = 0; i < timingcount; i++)
+			{
+				div_u(quotient, remainder, dividend, divisor);
+			};
+
+			string runmsg = "Divide function timing. Ran "
+				+ to_string(timingcount) + " times.\n";
+			Logger::WriteMessage(runmsg.c_str());
+		};
 		TEST_METHOD(ui512md_04_div64)
 		{
 			u64 seed = 0;

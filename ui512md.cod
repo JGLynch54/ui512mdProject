@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler (x64) Version 14.43.34808.0   03/03/25 14:04:52
+Microsoft (R) Macro Assembler (x64) Version 14.43.34808.0   03/05/25 21:09:42
 ui512md.asm						     Page 1 - 1
 
 
@@ -1296,41 +1296,51 @@ ui512md.asm						     Page 1 - 1
  0000022A  48/ 33 C0						XOR				RAX, RAX
  0000022D  48/ 89 85						MOV				overflow, RAX
 	   FFFFFF60
-				;
- 00000234  49/ 8B 40 38						MOV				RAX, [ R8 + 7 * 8 ]					; multiplicand 8th qword
- 00000238  49/ F7 E1						MUL				R9									; times multiplier
- 0000023B  48/ 01 45 B8						ADD				product [ 7 * 8 ], RAX				; to working product 8th word
- 0000023F  48/ 11 55 B0						ADC				product [ 6 * 8 ], RDX				; 'overflow' to 7th qword of working product
- 00000243  49/ 8B 40 30						MOV				RAX, [ R8 + 6 * 8 ]					; 7th
- 00000247  49/ F7 E1						MUL				R9
- 0000024A  48/ 01 45 B0						ADD				product [ 6 * 8 ], RAX			
- 0000024E  48/ 11 55 A8						ADC				product [ 5 * 8 ], RDX
- 00000252  49/ 8B 40 28						MOV				RAX, [ R8 + 5 * 8 ]					; 6th
- 00000256  49/ F7 E1						MUL				R9
- 00000259  48/ 01 45 A8						ADD				product [ 5 * 8 ], RAX			
- 0000025D  48/ 11 55 A0						ADC				product [ 4 * 8 ], RDX
- 00000261  49/ 8B 40 20						MOV				RAX, [ R8 + 4 * 8 ]					; 5th
- 00000265  49/ F7 E1						MUL				R9
- 00000268  48/ 01 45 A0						ADD				product [ 4 * 8 ], RAX			
- 0000026C  48/ 11 55 98						ADC				product [ 3 * 8 ], RDX
- 00000270  49/ 8B 40 18						MOV				RAX, [ R8 + 3 * 8 ]					; 4th
- 00000274  49/ F7 E1						MUL				R9
- 00000277  48/ 01 45 98						ADD				product [ 3 * 8 ], RAX			
- 0000027B  48/ 11 55 90						ADC				product [ 2 * 8 ], RDX
- 0000027F  49/ 8B 40 10						MOV				RAX, [ R8 + 2 * 8 ]					; 3rd
- 00000283  49/ F7 E1						MUL				R9
- 00000286  48/ 01 45 90						ADD				product [ 2 * 8 ], RAX			
- 0000028A  48/ 11 55 88						ADC				product [ 1 * 8 ], RDX
- 0000028E  49/ 8B 40 08						MOV				RAX, [ R8 + 1 * 8 ]					; 2nd
- 00000292  49/ F7 E1						MUL				R9
- 00000295  48/ 01 45 88						ADD				product [ 1 * 8 ], RAX			
- 00000299  48/ 11 55 80						ADC				product [ 0 * 8 ], RDX
+
+				; FOR EACH index of 7 thru 1 (ommiting 0): fetch qword of multiplicand, multiply, add 128 bit (RAX,RDX) to running working product
+								FOR				idx, <7, 6, 5, 4, 3, 2, 1>
+								MOV				RAX, [ R8 + idx * 8 ]				; multiplicand [ idx ] qword -> RAX
+								MUL				R9									; times multiplier -> RAX, RDX
+								ADD				product [ idx * 8 ], RAX			; add RAX to working product [ idx ] word
+								ADC				product [ (idx - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+								ENDM
+ 00000234  49/ 8B 40 38	     1					MOV				RAX, [ R8 + 7 * 8 ]				; multiplicand [ idx ] qword -> RAX
+ 00000238  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 0000023B  48/ 01 45 B8	     1					ADD				product [ 7 * 8 ], RAX			; add RAX to working product [ idx ] word
+ 0000023F  48/ 11 55 B0	     1					ADC				product [ (7 - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+ 00000243  49/ 8B 40 30	     1					MOV				RAX, [ R8 + 6 * 8 ]				; multiplicand [ idx ] qword -> RAX
+ 00000247  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 0000024A  48/ 01 45 B0	     1					ADD				product [ 6 * 8 ], RAX			; add RAX to working product [ idx ] word
+ 0000024E  48/ 11 55 A8	     1					ADC				product [ (6 - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+ 00000252  49/ 8B 40 28	     1					MOV				RAX, [ R8 + 5 * 8 ]				; multiplicand [ idx ] qword -> RAX
+ 00000256  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000259  48/ 01 45 A8	     1					ADD				product [ 5 * 8 ], RAX			; add RAX to working product [ idx ] word
+ 0000025D  48/ 11 55 A0	     1					ADC				product [ (5 - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+ 00000261  49/ 8B 40 20	     1					MOV				RAX, [ R8 + 4 * 8 ]				; multiplicand [ idx ] qword -> RAX
+ 00000265  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000268  48/ 01 45 A0	     1					ADD				product [ 4 * 8 ], RAX			; add RAX to working product [ idx ] word
+ 0000026C  48/ 11 55 98	     1					ADC				product [ (4 - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+ 00000270  49/ 8B 40 18	     1					MOV				RAX, [ R8 + 3 * 8 ]				; multiplicand [ idx ] qword -> RAX
+ 00000274  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000277  48/ 01 45 98	     1					ADD				product [ 3 * 8 ], RAX			; add RAX to working product [ idx ] word
+ 0000027B  48/ 11 55 90	     1					ADC				product [ (3 - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+ 0000027F  49/ 8B 40 10	     1					MOV				RAX, [ R8 + 2 * 8 ]				; multiplicand [ idx ] qword -> RAX
+ 00000283  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000286  48/ 01 45 90	     1					ADD				product [ 2 * 8 ], RAX			; add RAX to working product [ idx ] word
+ 0000028A  48/ 11 55 88	     1					ADC				product [ (2 - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+ 0000028E  49/ 8B 40 08	     1					MOV				RAX, [ R8 + 1 * 8 ]				; multiplicand [ idx ] qword -> RAX
+ 00000292  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000295  48/ 01 45 88	     1					ADD				product [ 1 * 8 ], RAX			; add RAX to working product [ idx ] word
+ 00000299  48/ 11 55 80	     1					ADC				product [ (1 - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+
+				; Most significant (idx=0), the high order result of the multiply in RDX, goes to the overflow of the caller
  0000029D  49/ 8B 00						MOV				RAX, [ R8 + 0 * 8 ]					; 1st
  000002A0  49/ F7 E1						MUL				R9
  000002A3  48/ 01 45 80						ADD				product [ 0 * 8 ], RAX
  000002A7  48/ 11 95						ADC				overflow, RDX						; last qword overflow is also the operation overflow
 	   FFFFFF60
 
+				; clean up, restore, send results back, return
  000002AE  48/ 8B 8D						MOV				RCX, savedRCX						; send results back to caller
 	   FFFFFF70
  000002B5  48/ 8D 55 80						LEA				RDX, product
@@ -1426,21 +1436,12 @@ ui512md.asm						     Page 1 - 1
 
 								LOCAL			padding1 [ 8 ] : QWORD
 								LOCAL			currnumerator [ 16 ] : QWORD
-								LOCAL			qdiv [ 8 ] : QWORD			
-								LOCAL			quotient [ 8 ] : QWORD
-								LOCAL			normdivisor [ 8 ] : QWORD
+								LOCAL			qdiv [ 8 ] : QWORD, quotient [ 8 ] : QWORD, normdivisor [ 8 ] : QWORD
 								LOCAL			savedRBP : QWORD
 								LOCAL			savedRCX : QWORD, savedRDX : QWORD, savedR8 : QWORD, savedR9 : QWORD
 								LOCAL			savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD
-								LOCAL			qHat : QWORD
-								LOCAL			rHat : QWORD
-								LOCAL			qovf : QWORD
-								LOCAL			currenumbegin : QWORD
-								LOCAL			normf : WORD
-								LOCAL			limEnumIdx : WORD
-								LOCAL			jIdx: WORD
-								LOCAL			dimM: WORD
-								LOCAL			dimN: WORD
+								LOCAL			qHat : QWORD, rHat : QWORD,	qovf : QWORD
+								LOCAL			normf : WORD, jIdx : WORD, dimM : WORD, dimN : WORD
 							
 								LOCAL			padding2 [ 16 ] : QWORD
  = padding2 + 64 - padding1	div_oset		EQU				padding2 + 64 - padding1
@@ -1603,218 +1604,239 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				[ RCX + 7 * 8 ], RAX
 			     1		ENDIF
 								;
- 00000362  48/ 8B 8D						MOV				RCX, savedR9						; divisor
-	   FFFFFE58
- 00000369  E8 00000000 E					CALL			msb_u								; most significant bit
- 0000036E  66| 83 F8 00						CMP				AX, 0								; msb < 0? 
- 00000372  0F 8C 0000027D					JL				divbyzero							; divisor is zero, abort
- 00000378  66| 83 F8 40						CMP				AX, 64								; divisor only one 64-bit word?
- 0000037C  7D 3E						JGE				mbynDiv								; no, do divide of m digit by n digit
+ 00000362  49/ 8B C9						MOV				RCX, R9								; divisor
+ 00000365  E8 00000000 E					CALL			msb_u								; most significant bit
+ 0000036A  66| 83 F8 FF						CMP				AX, -1								; msb < 0? 
+ 0000036E  0F 84 0000025D					JE				divbyzero							; divisor is zero, abort
+ 00000374  66| 83 F8 40						CMP				AX, 64								; divisor only one 64-bit word?
+ 00000378  7D 3E						JGE				mbynDiv								; no, do divide of m digit by n digit
 
 				;	divide of m 64-bit digits by one 64 bit divisor
- 0000037E  48/ 8B 8D						MOV				RCX, savedRCX						; set up parms for call to div by 64bit: RCX - addr of quotient
+ 0000037A  48/ 8B 8D						MOV				RCX, savedRCX						; set up parms for call to div by 64bit: RCX - addr of quotient
 	   FFFFFE70
- 00000385  48/ 8B 95						MOV				RDX, savedRDX						; RDX - addr of remainder
+ 00000381  48/ 8B 95						MOV				RDX, savedRDX						; RDX - addr of remainder
 	   FFFFFE68
- 0000038C  4C/ 8B 85						MOV				R8, savedR8							; R8 - addr of dividend
+ 00000388  4C/ 8B 85						MOV				R8, savedR8							; R8 - addr of dividend
 	   FFFFFE60
- 00000393  48/ 8B 85						MOV				RAX, savedR9
+ 0000038F  48/ 8B 85						MOV				RAX, savedR9
 	   FFFFFE58
- 0000039A  4C/ 8B 48 38						MOV				R9, Q_PTR [RAX + 7 * 8 ]			; R9 - value of 64 bit divisor
- 0000039E  E8 0000025A						CALL			div_uT64
- 000003A3  48/ 8B 95						MOV				RDX, savedRDX						; move 64 bit remainder to last word of 8 word remainder
+ 00000396  4C/ 8B 48 38						MOV				R9, Q_PTR [RAX + 7 * 8 ]			; R9 - value of 64 bit divisor
+ 0000039A  E8 0000023A						CALL			div_uT64
+ 0000039F  48/ 8B 95						MOV				RDX, savedRDX						; move 64 bit remainder to last word of 8 word remainder
 	   FFFFFE68
- 000003AA  48/ 8B 02						MOV				RAX, Q_PTR [ RDX ]
- 000003AD  48/ 89 42 38						MOV				Q_PTR [ RDX + 7 * 8 ], RAX
- 000003B1  48/ 33 C0						XOR				RAX, RAX							; clear first word of remainder (where 64 bit divide put it)
- 000003B4  48/ 89 02						MOV				Q_PTR [ RDX ], RAX
- 000003B7  E9 000001FC						JMP				cleanupret
+ 000003A6  48/ 8B 02						MOV				RAX, Q_PTR [ RDX ]
+ 000003A9  48/ 89 42 38						MOV				Q_PTR [ RDX + 7 * 8 ], RAX
+ 000003AD  48/ 33 C0						XOR				RAX, RAX							; clear first word of remainder (where 64 bit divide put it)
+ 000003B0  48/ 89 02						MOV				Q_PTR [ RDX ], RAX
+ 000003B3  E9 000001DC						JMP				cleanupret
 
 				;
 				; Going to divide an 'm' digit dividend (u), by an 'n' digit divisor (v)
 				;	See Knuth, The Art of Computer Programming, Volume 2, Algorithm D, Pages 272-278
- 000003BC			mbynDiv:
- 000003BC  66| 89 85						MOV				dimN, AX							; still have divisor msb in AX
-	   FFFFFE16
- 000003C3  66| C1 A5						SHL				dimN, 6								; div msb by 6 to get msq (most significant qword) aka 'n'
-	   FFFFFE16 06
- 000003CB  66| C7 85						MOV				normf, 64
-	   FFFFFE1E 0040
- 000003D4  66| 29 85						SUB				normf, AX							; Nr bits to get leading divisor bit to msb saved at normf			
-	   FFFFFE1E
- 000003DB  48/ 33 C0						XOR				RAX, RAX
- 000003DE  66| 89 85						MOV				dimM, AX
-	   FFFFFE18
- 000003E5			@@:
- 000003E5  66| FF 85						INC				dimM
-	   FFFFFE18
- 000003EC  66| 83 BD						CMP				dimM, 8
-	   FFFFFE18 08
- 000003F4  0F 84 000001BE					JE				cleanupret							; dividend is zero, both quotient and remainder already set to zero, so returm
- 000003FA  49/ 3B 00						CMP				RAX, [ R8 ]
- 000003FD  4D/ 8D 40 08						LEA				R8, 8 [ R8 ]
- 00000401  74 E2						JZ				@B
- 00000403  66| FF 8D						DEC				dimM								; now have dimensions of divisor (v) which is dimN, and dividend (u) which is dimM
-	   FFFFFE18
+ 000003B8			mbynDiv:
+ 000003B8  66| 89 85						MOV				dimN, AX							; still have divisor msb in AX
+	   FFFFFE20
+ 000003BF  66| C1 A5						SHL				dimN, 6								; div msb by 6 to get msq (most significant qword) aka 'n'
+	   FFFFFE20 06
+ 000003C7  66| 89 85						MOV				normf, AX
+	   FFFFFE26
+ 000003CE  66| 83 8D						OR				normf, 63
+	   FFFFFE26 3F
+ 000003D6  66| B8 0007						MOV				AX, 7
+ 000003DA  66| 2B 85						SUB				AX, dimN
+	   FFFFFE20
+ 000003E1  66| 89 85						MOV				dimN, AX
+	   FFFFFE20
+ 000003E8  66| B8 003F						MOV				AX, 63
+ 000003EC  66| 2B 85						SUB				AX, normf							; Nr bits to get leading divisor bit to msb saved at normf
+	   FFFFFE26
+ 000003F3  66| 89 85						MOV				normf, AX
+	   FFFFFE26
+ 000003FA  48/ 33 C0						XOR				RAX, RAX
+ 000003FD			@@:
+ 000003FD  66| FF 85						INC				dimM
+	   FFFFFE22
+ 00000404  66| 83 BD						CMP				dimM, 8
+	   FFFFFE22 08
+ 0000040C  0F 84 00000182					JE				cleanupret							; dividend is zero, both quotient and remainder already set to zero, so returm
+ 00000412  49/ 3B 00						CMP				RAX, [ R8 ]
+ 00000415  4D/ 8D 40 08						LEA				R8, 8 [ R8 ]
+ 00000419  74 E2						JZ				@B
+ 0000041B  66| FF 8D						DEC				dimM								; now have dimensions of divisor (v) which is dimN, and dividend (u) which is dimM
+	   FFFFFE22
+ 00000422  66| B8 0007						MOV				AX, 7
+ 00000426  66| 2B 85						SUB				AX, dimM
+	   FFFFFE22
+ 0000042D  66| 89 85						MOV				dimM, AX
+	   FFFFFE22
+ 00000434  66| 89 85						MOV				jIdx, AX							; Index of quotient digit, also counter to zero and done with divide
+	   FFFFFE24
 
 				; Step D1: Normalize	
 								
- 0000040A  48/ 8B 95						MOV				RDX, savedR9						; callers divisor
+ 0000043B  48/ 8B 95						MOV				RDX, savedR9						; callers divisor
 	   FFFFFE58
- 00000411  48/ 8D 8D						LEA				RCX, normdivisor					; local copy of divisor, normalized
+ 00000442  48/ 8D 8D						LEA				RCX, normdivisor					; local copy of divisor, normalized
 	   FFFFFE80
- 00000418  66| 44/ 8B 85					MOV				R8W, normf
-	   FFFFFE1E
- 00000420  E8 00000000 E					CALL			shl_u								; by shifting until MSB is high bit
+ 00000449  66| 44/ 8B 85					MOV				R8W, normf
+	   FFFFFE26
+ 00000451  E8 00000000 E					CALL			shl_u								; by shifting until MSB is high bit
 								;
- 00000425  48/ 8B 95						MOV				RDX, savedR8						; callers dividend
+ 00000456  48/ 8B 95						MOV				RDX, savedR8						; callers dividend
 	   FFFFFE60
- 0000042C  48/ 8D 4D 80						LEA				RCX, currnumerator [ 8 * 8 ]		; starting numerator is the normalized supplied dividend
- 00000430  66| 44/ 8B 85					MOV				R8W, normf
-	   FFFFFE1E
- 00000438  E8 00000000 E					CALL			shl_u
- 0000043D  48/ 8B 95						MOV				RDX, savedR8
+ 0000045D  48/ 8D 4D 80						LEA				RCX, currnumerator [ 8 * 8 ]		; starting numerator is the normalized supplied dividend
+ 00000461  66| 44/ 8B 85					MOV				R8W, normf
+	   FFFFFE26
+ 00000469  E8 00000000 E					CALL			shl_u
+ 0000046E  66| 83 BD						CMP				dimM, 0
+	   FFFFFE22 00
+ 00000476  7F 2E						JG				@F
+ 00000478  48/ 8D 95						LEA				RDX, currnumerator					; zero first eight words of working enumerator
+	   FFFFFF40
+								Zero512			RDX
+			     1					CheckAlign		RDX
+			     2					LOCAL			ok
+			     2		IF	__CheckAlign
+			     2					TEST			RDX, 63							; Is specified param aligned 64?
+			     2					JZ				??0015									; Yes, passes test, continue
+			     2					INT				0									; No, fails, break (can substitute other exception handling)
+			     2	??0015:
+			     2		ENDIF
+			     1		IF	__UseZ
+ 0000047F  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+	   FF
+ 00000485  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
+	   3A
+			     1		ELSEIF	__UseY
+			     1					VPXORQ			YMM4, YMM4, YMM4
+			     1					VMOVDQA64		YM_PTR [ RDX + 0 * 8 ], YMM4
+			     1					VMOVDQA64		YM_PTR [ RDX + 4 * 8 ], YMM4
+			     1		ELSEIF	__UseX
+			     1					PXOR			XMM4, XMM4
+			     1					MOVDQA			XM_PTR [ RDX + 0 * 8 ], XMM4
+			     1					MOVDQA			XM_PTR [ RDX + 2 * 8 ], XMM4
+			     1					MOVDQA			XM_PTR [ RDX + 4 * 8 ], XMM4
+			     1					MOVDQA			XM_PTR [ RDX + 6 * 8 ], XMM4			
+			     1		ELSE
+			     1					XOR				RAX, RAX
+			     1					MOV				[ RDX + 0 * 8 ], RAX
+			     1					MOV				[ RDX + 1 * 8 ], RAX
+			     1					MOV				[ RDX + 2 * 8 ], RAX
+			     1					MOV				[ RDX + 3 * 8 ], RAX
+			     1					MOV				[ RDX + 4 * 8 ], RAX
+			     1					MOV				[ RDX + 5 * 8 ], RAX
+			     1					MOV				[ RDX + 6 * 8 ], RAX
+			     1					MOV				[ RDX + 7 * 8 ], RAX
+			     1		ENDIF
+ 0000048B  48/ 8B 95						MOV				RDX, savedR8
 	   FFFFFE60
- 00000444  48/ 8D 8D						LEA				RCX, currnumerator [ 0 * 8 ]
-	   FFFFFF40
- 0000044B  66| 41/ B8						MOV				R8W, 64
-	   0040
- 00000450  66| 44/ 2B 85					SUB				R8W, normf
-	   FFFFFE1E
- 00000458  E8 00000000 E					CALL			shr_u								; now have up to 16 word bit-shifted dividend in 'enumerator'
- 0000045D  48/ 8D 8D						LEA				RCX, currnumerator
-	   FFFFFF40
- 00000464			@@:
- 00000464  48/ 89 8D						MOV				currenumbegin, RCX					; set address of the first non-zero word of the dividend (enumerator)
-	   FFFFFE20
- 0000046B  48/ 8B 11						MOV				RDX, [ RCX ]
- 0000046E  48/ 85 D2						TEST			RDX, RDX
- 00000471  48/ 8D 49 08						LEA				RCX, [ RCX + 8 ]
- 00000475  74 ED						JZ				@B
- 00000477  48/ 0F B7 8D						MOVZX			RCX, normf
-	   FFFFFE1E
- 0000047F  66| C1 E9 04						SHR				CX, 4
- 00000483  66| 89 8D						MOV				limEnumIdx, CX
-	   FFFFFE1C
-				;			Step D2: Initialize
- 0000048A  48/ 33 C0						XOR				RAX, RAX
- 0000048D  66| 89 85						MOV				jIdx, AX
-	   FFFFFE1A
+ 00000492  48/ 8B 02						MOV				RAX, [ RDX ]						; if numerator has 8 qwords (dimM = 7), then the shift just lost us high order bits, get them			
+ 00000495  66| 8B 8D						MOV				CX, normf
+	   FFFFFE26
+ 0000049C  48/ D3 E8						SHR				RAX, CL
+ 0000049F  48/ 89 85						MOV				currnumerator [ 7 * 8 ], RAX		; store them at m + 1 (the word 'before' the other eight qwords)
+	   FFFFFF78
 
-				;			Step D3: Calculate  q^
- 00000494			D3:
- 00000494  48/ 33 D2						XOR				RDX, RDX							; DIV takes 128 bits, RDX the high 64, RAX the low
- 00000497  48/ 0F B7 85						MOVZX			RAX, jIdx
-	   FFFFFE1A
- 0000049F  48/ 8B 8D						MOV				RCX, currenumbegin
-	   FFFFFE20
- 000004A6  48/ 8D 0C C1						LEA				RCX, [ RCX + RAX * 8 ]
- 000004AA  48/ 8B 11						MOV				RDX, [ RCX ]
- 000004AD  48/ 8B 41 08						MOV				RAX, [ RCX + 8 ]
- 000004B1  48/ 8B 8D						MOV				RCX, normdivisor
+ 000004A6			@@:
+				;			Step D3: Calculate  q^D3:
+ 000004A6			D3:
+ 000004A6  48/ 0F B7 8D						MOVZX			RCX, jIdx
+	   FFFFFE24
+ 000004AE  4C/ 8D 85						LEA				R8, currnumerator [ 7 * 8 ]
+	   FFFFFF78
+ 000004B5  49/ 8B 14 C8						MOV				RDX, [R8 + [ RCX * 8 ] ]				; DIV takes 128 bits, RDX the high 64, RAX the low
+ 000004B9  48/ FF C1						INC				RCX
+ 000004BC  49/ 8B 04 C8						MOV				RAX, [R8 + [ RCX * 8] ]
+ 000004C0  48/ 8B 8D						MOV				RCX, normdivisor
 	   FFFFFE80
- 000004B8  48/ F7 F1						DIV				RCX
- 000004BB  48/ 89 85						MOV				qHat, RAX
+ 000004C7  48/ F7 F1						DIV				RCX
+ 000004CA  48/ 89 85						MOV				qHat, RAX
 	   FFFFFE38
- 000004C2  48/ 89 95						MOV				rHat, RDX
+ 000004D1  48/ 89 95						MOV				rHat, RDX
 	   FFFFFE30
-				;			test q^
- 000004C9			@retest:
- 000004C9  48/ 85 C0						TEST			RAX, RAX							; q^ = b? (2^64)
- 000004CC  74 34						JZ				@adj
- 000004CE  48/ F7 A5						MUL				normdivisor [ 1 * 8 ]
-	   FFFFFE88
- 000004D5  48/ 0F B7 8D						MOVZX			RCX, jIdx
-	   FFFFFE1A
- 000004DD  4C/ 8B 85						MOV				R8, currenumbegin
-	   FFFFFE20
- 000004E4  49/ 8B 4C C8						MOV				RCX, [ R8 + RCX * 8 + 16]
-	   10
- 000004E9  48/ 03 8D						ADD				RCX, rHat
-	   FFFFFE30
- 000004F0  72 05						JC				@5
- 000004F2  48/ 3B C1						CMP				RAX, RCX
- 000004F5  7F 0B						JG				@adj
- 000004F7  48/ 83 FA 01		@5:				CMP				RDX, 1
- 000004FB  7F 05						JG				@adj
- 000004FD  48/ 3B C1						CMP				RAX, RCX
- 00000500  7E 2B						JLE				D4
- 00000502			@adj:
- 00000502  48/ 8B 85						MOV				RAX, qHat
-	   FFFFFE38
- 00000509  48/ FF C8						DEC				RAX
- 0000050C  48/ 89 85						MOV				qHat, RAX
-	   FFFFFE38
- 00000513  48/ 8B C1						MOV				RAX, RCX
- 00000516  48/ 03 85						ADD				RAX, rHat
-	   FFFFFE30
- 0000051D  48/ 89 85						MOV				rHat, RAX
-	   FFFFFE30
- 00000524  48/ 8B 85						MOV				RAX, qHat
-	   FFFFFE38
- 0000052B  73 9C						JNC				@retest
 
 				;			Step D4: Multiply and Subtract
- 0000052D			D4:
- 0000052D  48/ 8D 8D						LEA				RCX, qdiv
+ 000004D8			D4:
+ 000004D8  48/ 8D 8D						LEA				RCX, qdiv
 	   FFFFFF00
- 00000534  48/ 8D 95						LEA				RDX, qovf
+ 000004DF  48/ 8D 95						LEA				RDX, qovf
 	   FFFFFE28
- 0000053B  4C/ 8D 85						LEA				R8, normdivisor
+ 000004E6  4C/ 8D 85						LEA				R8, normdivisor
 	   FFFFFE80
- 00000542  4C/ 8B 8D						MOV				R9, qHat
+ 000004ED  4C/ 8B 8D						MOV				R9, qHat
 	   FFFFFE38
- 00000549  E8 FFFFFC9D						CALL			mult_uT64							; multiply divisor by trial quotient digit (qHat)
- 0000054E  48/ 8B 85						MOV				RAX, qovf
+ 000004F4  E8 FFFFFCF2						CALL			mult_uT64							; multiply divisor by trial quotient digit (qHat)
+ 000004F9  48/ 8B 85						MOV				RAX, qovf
 	   FFFFFE28
- 00000555  48/ 85 C0						TEST			RAX, RAX
- 00000558  75 5E						JNZ				cleanupret
- 0000055A  48/ 8D 8D						LEA				RCX, currnumerator
+ 00000500  48/ 85 C0						TEST			RAX, RAX
+ 00000503  0F 85 0000008B					JNZ				cleanupret
+ 00000509  48/ 8D 8D						LEA				RCX, currnumerator
 	   FFFFFF40
- 00000561  48/ 8D 95						LEA				RDX, currnumerator
+ 00000510  48/ 8D 95						LEA				RDX, currnumerator
 	   FFFFFF40
- 00000568  4C/ 8D 85						LEA				R8, qdiv
+ 00000517  4C/ 8D 85						LEA				R8, qdiv
 	   FFFFFF00
- 0000056F  E8 00000000 E					CALL			sub_u
- 00000574  4D/ 8D 64 24						LEA				R12, 8 [ R12 ]
+ 0000051E  E8 00000000 E					CALL			sub_u
+ 00000523  4D/ 8D 64 24						LEA				R12, 8 [ R12 ]
 	   08
- 00000579  49/ 83 FC 40						CMP				R12, 8 * 8
- 0000057D  0F 8C FFFFFF11					JL				D3
+ 00000528  49/ 83 FC 40						CMP				R12, 8 * 8
+ 0000052C  0F 8C FFFFFF74					JL				D3
 
- 00000583			D8UnNormalize:
- 00000583  48/ 8B 8D						MOV				RCX, savedRDX						; reduced working numerator is now the remainder
+				; Step D5: Test remainder
+ 00000532			D5:
+ 00000532  48/ 0F B7 8D						MOVZX				RCX, jIdx
+	   FFFFFE24
+ 0000053A  48/ 8B 85						MOV				RAX, qHat
+	   FFFFFE38
+ 00000541  48/ 89 84 CD						MOV				quotient [ RCX * 8 ], RAX
+	   FFFFFEC0
+
+				; Step D6: Add Back
+ 00000549			D6:
+
+				; Step D7: Loop on j
+ 00000549			D7:
+ 00000549  66| FF 85						INC				jIdx
+	   FFFFFE24
+ 00000550  66| F7 85						TEST			jIdx, 8
+	   FFFFFE24 0008
+ 00000559  0F 8C FFFFFF47					JL				D3
+
+				; Step D8: Un Normalize:
+ 0000055F			D8UnNormalize:
+ 0000055F  48/ 8B 8D						MOV				RCX, savedRDX						; reduced working numerator is now the remainder
 	   FFFFFE68
- 0000058A  48/ 8D 95						LEA				RDX, currnumerator					; copy to callers remainder
+ 00000566  48/ 8D 95						LEA				RDX, currnumerator					; copy to callers remainder
 	   FFFFFF40
- 00000591  66| 44/ 8B 85					MOV				R8W, normf
-	   FFFFFE1E
- 00000599  E8 00000000 E					CALL			shr_u
+ 0000056D  66| 44/ 8B 85					MOV				R8W, normf
+	   FFFFFE26
+ 00000575  E8 00000000 E					CALL			shr_u
 								;
- 0000059E  48/ 8B 8D						MOV				RCX, savedRCX						; copy working quotient to callers quotient
+ 0000057A  48/ 8B 8D						MOV				RCX, savedRCX						; copy working quotient to callers quotient
 	   FFFFFE70
- 000005A5  48/ 8D 95						LEA				RDX, quotient
+ 00000581  48/ 8D 95						LEA				RDX, quotient
 	   FFFFFEC0
 								Copy512			RCX, RDX
 			     1					CheckAlign		RCX
 			     2					LOCAL			ok
 			     2		IF	__CheckAlign
 			     2					TEST			RCX, 63							; Is specified param aligned 64?
-			     2					JZ				??0015									; Yes, passes test, continue
+			     2					JZ				??0016									; Yes, passes test, continue
 			     2					INT				0									; No, fails, break (can substitute other exception handling)
-			     2	??0015:
+			     2	??0016:
 			     2		ENDIF
 			     1					CheckAlign		RDX
 			     2					LOCAL			ok
 			     2		IF	__CheckAlign
 			     2					TEST			RDX, 63							; Is specified param aligned 64?
-			     2					JZ				??0016									; Yes, passes test, continue
+			     2					JZ				??0017									; Yes, passes test, continue
 			     2					INT				0									; No, fails, break (can substitute other exception handling)
-			     2	??0016:
+			     2	??0017:
 			     2		ENDIF
 			     1		IF	__UseZ
- 000005AC  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
+ 00000588  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
 	   3A
- 000005B2  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 0000058E  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					VMOVDQA64		YMM4, YM_PTR [ RDX + 0 * 8 ]
@@ -1848,20 +1870,20 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				RAX, [ RDX + 7 * 8 ]
 			     1					MOV				[ RCX + 7 * 8 ], RAX
 			     1		ENDIF
- 000005B8			cleanupret:
- 000005B8  4C/ 8B A5						MOV				R12, savedR12
+ 00000594			cleanupret:
+ 00000594  4C/ 8B A5						MOV				R12, savedR12
 	   FFFFFE40
- 000005BF  4C/ 8B 9D						MOV				R11, savedR11
+ 0000059B  4C/ 8B 9D						MOV				R11, savedR11
 	   FFFFFE48
- 000005C6  4C/ 8B 95						MOV				R10, savedR10
+ 000005A2  4C/ 8B 95						MOV				R10, savedR10
 	   FFFFFE50
- 000005CD  4C/ 8B 8D						MOV				R9,  savedR9
+ 000005A9  4C/ 8B 8D						MOV				R9,  savedR9
 	   FFFFFE58
- 000005D4  4C/ 8B 85						MOV				R8,  savedR8
+ 000005B0  4C/ 8B 85						MOV				R8,  savedR8
 	   FFFFFE60
- 000005DB  48/ 8B 95						MOV				RDX, savedRDX
+ 000005B7  48/ 8B 95						MOV				RDX, savedRDX
 	   FFFFFE68
- 000005E2  48/ 8B 8D						MOV				RCX, savedRCX						; restore parameter registers back to "as-called" values
+ 000005BE  48/ 8B 8D						MOV				RCX, savedRCX						; restore parameter registers back to "as-called" values
 	   FFFFFE70
 								ReleaseFrame	savedRBP
 			     1	;			release memory set up by createframe macro
@@ -1869,18 +1891,18 @@ ui512md.asm						     Page 1 - 1
 			     1	;			after these instructions are executed, no LOCAL variables can be accessed
 			     1	;			This needs to be done to restore the stack correctly, but can be done only once
 			     1	;			Strongly suggest doing this just prior to return instruction, and that there is only one return instruction from the PROC
- 000005E9  48/ 8B AD	     1				MOV				RBP, savedRBP
+ 000005C5  48/ 8B AD	     1				MOV				RBP, savedRBP
 	   FFFFFE78
- 000005F0  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
- 000005F1  48/ 33 C0						XOR				RAX, RAX							; return zero
- 000005F4			exit:
+ 000005CC  C9		     1				LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
+ 000005CD  48/ 33 C0						XOR				RAX, RAX							; return zero
+ 000005D0			exit:
 								RET
- 000005F4  C3		   *	    ret    00000h
- 000005F5			divbyzero:
- 000005F5  8B 05 00000008 R					MOV				EAX, ret_1
- 000005FB  EB F7						JMP				exit
+ 000005D0  C3		   *	    ret    00000h
+ 000005D1			divbyzero:
+ 000005D1  8B 05 00000008 R					MOV				EAX, ret_1
+ 000005D7  EB F7						JMP				exit
 
- 000005FD			div_u			ENDP
+ 000005D9			div_u			ENDP
 
 				;
 				;--------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1895,57 +1917,68 @@ ui512md.asm						     Page 1 - 1
 
 								OPTION			PROLOGUE:none
 								OPTION			EPILOGUE:none
- 000005FD			div_uT64		PROC			PUBLIC
+ 000005D9			div_uT64		PROC			PUBLIC
 
- 000005FD  4D/ 85 C9						TEST			R9, R9
- 00000600  74 63						JZ				@@DivByZero
-								;
- 00000602  4C/ 8B D2						MOV				R10, RDX
- 00000605  48/ 33 D2						XOR				RDX, RDX
- 00000608  49/ 8B 00						MOV				RAX, Q_PTR [ R8 + 0 * 8 ]			; Dividend first word
- 0000060B  49/ F7 F1						DIV				R9									; Divisor
- 0000060E  48/ 89 01						MOV				Q_PTR [ RCX + 0 * 8 ], RAX			; Quotient to callers quotient first word; Div moved remainder to RDX
- 00000611  49/ 8B 40 08						MOV				RAX, Q_PTR [ R8 + 1 * 8 ]			; 2nd
- 00000615  49/ F7 F1						DIV				R9
- 00000618  48/ 89 41 08						MOV				Q_PTR [ RCX + 1 * 8 ], RAX
- 0000061C  49/ 8B 40 10						MOV				RAX, Q_PTR [ R8 + 2 * 8 ]			; 3rd
- 00000620  49/ F7 F1						DIV				R9
- 00000623  48/ 89 41 10						MOV				Q_PTR [ RCX + 2 * 8 ], RAX
- 00000627  49/ 8B 40 18						MOV				RAX, Q_PTR [ R8 + 3 * 8 ]			; 4th
- 0000062B  49/ F7 F1						DIV				R9
- 0000062E  48/ 89 41 18						MOV				Q_PTR [ RCX + 3 * 8 ], RAX
- 00000632  49/ 8B 40 20						MOV				RAX, Q_PTR [ R8 + 4 * 8 ]			; 5th
- 00000636  49/ F7 F1						DIV				R9
- 00000639  48/ 89 41 20						MOV				Q_PTR [ RCX + 4 * 8 ], RAX
- 0000063D  49/ 8B 40 28						MOV				RAX, Q_PTR [ R8 + 5 * 8 ]			; 6th
- 00000641  49/ F7 F1						DIV				R9
- 00000644  48/ 89 41 28						MOV				Q_PTR [ RCX + 5 * 8 ], RAX
- 00000648  49/ 8B 40 30						MOV				RAX, Q_PTR [ R8 + 6 * 8 ]			; 7th
- 0000064C  49/ F7 F1						DIV				R9
- 0000064F  48/ 89 41 30						MOV				Q_PTR [ RCX + 6 * 8 ], RAX			; 8th and final
- 00000653  49/ 8B 40 38						MOV				RAX, Q_PTR [ R8 + 7 * 8 ]
- 00000657  49/ F7 F1						DIV				R9
- 0000065A  48/ 89 41 38						MOV				Q_PTR [ RCX + 7 * 8 ], RAX
- 0000065E  49/ 89 12						MOV				Q_PTR [ R10 ], RDX					; remainder to callers remainder
- 00000661  48/ 33 C0						XOR				RAX, RAX							; return zero
- 00000664			@@exit:			
- 00000664  C3							RET
+				; Test divisor for divide by zero				
+ 000005D9  4D/ 85 C9						TEST			R9, R9
+ 000005DC  74 63						JZ				@@DivByZero
+
+				; DIV instruction (64-bit) uses RAX and RDX. Need to move RDX (addr of remainder) out of the way; start it off with zero
+ 000005DE  4C/ 8B D2						MOV				R10, RDX
+ 000005E1  48/ 33 D2						XOR				RDX, RDX
+
+				; FOR EACH index of 0 thru 7: get qword of dividend, divide by divisor, store qword of quotient
+								FOR				idx, <0,1,2,3,4,5,6,7>
+								MOV				RAX, Q_PTR [ R8 + idx * 8 ]			; dividend [ idx ] -> RAX
+								DIV				R9									; divide by divisor in R9
+								MOV				Q_PTR [ RCX + idx * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+								ENDM
+ 000005E4  49/ 8B 00	     1					MOV				RAX, Q_PTR [ R8 + 0 * 8 ]			; dividend [ idx ] -> RAX
+ 000005E7  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 000005EA  48/ 89 01	     1					MOV				Q_PTR [ RCX + 0 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 000005ED  49/ 8B 40 08	     1					MOV				RAX, Q_PTR [ R8 + 1 * 8 ]			; dividend [ idx ] -> RAX
+ 000005F1  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 000005F4  48/ 89 41 08	     1					MOV				Q_PTR [ RCX + 1 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 000005F8  49/ 8B 40 10	     1					MOV				RAX, Q_PTR [ R8 + 2 * 8 ]			; dividend [ idx ] -> RAX
+ 000005FC  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 000005FF  48/ 89 41 10	     1					MOV				Q_PTR [ RCX + 2 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 00000603  49/ 8B 40 18	     1					MOV				RAX, Q_PTR [ R8 + 3 * 8 ]			; dividend [ idx ] -> RAX
+ 00000607  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 0000060A  48/ 89 41 18	     1					MOV				Q_PTR [ RCX + 3 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 0000060E  49/ 8B 40 20	     1					MOV				RAX, Q_PTR [ R8 + 4 * 8 ]			; dividend [ idx ] -> RAX
+ 00000612  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 00000615  48/ 89 41 20	     1					MOV				Q_PTR [ RCX + 4 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 00000619  49/ 8B 40 28	     1					MOV				RAX, Q_PTR [ R8 + 5 * 8 ]			; dividend [ idx ] -> RAX
+ 0000061D  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 00000620  48/ 89 41 28	     1					MOV				Q_PTR [ RCX + 5 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 00000624  49/ 8B 40 30	     1					MOV				RAX, Q_PTR [ R8 + 6 * 8 ]			; dividend [ idx ] -> RAX
+ 00000628  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 0000062B  48/ 89 41 30	     1					MOV				Q_PTR [ RCX + 6 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 0000062F  49/ 8B 40 38	     1					MOV				RAX, Q_PTR [ R8 + 7 * 8 ]			; dividend [ idx ] -> RAX
+ 00000633  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9
+ 00000636  48/ 89 41 38	     1					MOV				Q_PTR [ RCX + 7 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+
+				; Last (least significant qword) divide leaves a remainder, store it at callers remainder
+ 0000063A  49/ 89 12						MOV				Q_PTR [ R10 ], RDX					; remainder to callers remainder
+ 0000063D  48/ 33 C0						XOR				RAX, RAX							; return zero
+ 00000640			@@exit:			
+ 00000640  C3							RET
 
 				;
- 00000665			@@DivByZero:
+ 00000641			@@DivByZero:
 								Zero512			RCX									; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
 			     1					CheckAlign		RCX
 			     2					LOCAL			ok
 			     2		IF	__CheckAlign
 			     2					TEST			RCX, 63							; Is specified param aligned 64?
-			     2					JZ				??0017									; Yes, passes test, continue
+			     2					JZ				??0018									; Yes, passes test, continue
 			     2					INT				0									; No, fails, break (can substitute other exception handling)
-			     2	??0017:
+			     2	??0018:
 			     2		ENDIF
 			     1		IF	__UseZ
- 00000665  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000641  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000066B  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000647  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					VPXORQ			YMM4, YMM4, YMM4
@@ -1968,14 +2001,14 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				[ RCX + 6 * 8 ], RAX
 			     1					MOV				[ RCX + 7 * 8 ], RAX
 			     1		ENDIF
- 00000671  48/ 33 C0						XOR				RAX, RAX
- 00000674  49/ 89 02						MOV				Q_PTR [ R10 ] , RAX					;
- 00000677  8B 05 00000008 R					MOV				EAX, ret_1							; return error (div by zero)
- 0000067D  EB E5						JMP				@@exit
- 0000067F			div_uT64		ENDP
+ 0000064D  48/ 33 C0						XOR				RAX, RAX
+ 00000650  49/ 89 02						MOV				Q_PTR [ R10 ] , RAX					;
+ 00000653  8B 05 00000008 R					MOV				EAX, ret_1							; return error (div by zero)
+ 00000659  EB E5						JMP				@@exit
+ 0000065B			div_uT64		ENDP
 
 								END
-Microsoft (R) Macro Assembler (x64) Version 14.43.34808.0   03/03/25 14:04:52
+Microsoft (R) Macro Assembler (x64) Version 14.43.34808.0   03/05/25 21:09:42
 ui512md.asm						     Symbols 2 - 1
 
 
@@ -1999,17 +2032,17 @@ Segments:
 
                 N a m e                  Length   Align   Class
 
-ui512md  . . . . . . . . . . . .	 0000067F 16	  'CODE'	
+ui512md  . . . . . . . . . . . .	 0000065B 16	  'CODE'	
 
 
 Procedures, parameters, and locals:
 
                 N a m e                 Type     Value    Attr
 
-div_uT64 . . . . . . . . . . . .	P 	 000005FD ui512md	Length= 00000082 Public
-  @@exit . . . . . . . . . . . .	L 	 00000664 ui512md	
-  @@DivByZero  . . . . . . . . .	L 	 00000665 ui512md	
-div_u  . . . . . . . . . . . . .	P 	 000002E2 ui512md	Length= 0000031B Public
+div_uT64 . . . . . . . . . . . .	P 	 000005D9 ui512md	Length= 00000082 Public
+  @@exit . . . . . . . . . . . .	L 	 00000640 ui512md	
+  @@DivByZero  . . . . . . . . .	L 	 00000641 ui512md	
+div_u  . . . . . . . . . . . . .	P 	 000002E2 ui512md	Length= 000002F7 Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   currnumerator  . . . . . . . .	QWord	 rbp - 000000C0
   qdiv . . . . . . . . . . . . .	QWord	 rbp - 00000100
@@ -2026,23 +2059,21 @@ div_u  . . . . . . . . . . . . .	P 	 000002E2 ui512md	Length= 0000031B Public
   qHat . . . . . . . . . . . . .	QWord	 rbp - 000001C8
   rHat . . . . . . . . . . . . .	QWord	 rbp - 000001D0
   qovf . . . . . . . . . . . . .	QWord	 rbp - 000001D8
-  currenumbegin  . . . . . . . .	QWord	 rbp - 000001E0
-  normf  . . . . . . . . . . . .	Word	 rbp - 000001E2
-  limEnumIdx . . . . . . . . . .	Word	 rbp - 000001E4
-  jIdx . . . . . . . . . . . . .	Word	 rbp - 000001E6
-  dimM . . . . . . . . . . . . .	Word	 rbp - 000001E8
-  dimN . . . . . . . . . . . . .	Word	 rbp - 000001EA
-  padding2 . . . . . . . . . . .	QWord	 rbp - 0000026C
-  mbynDiv  . . . . . . . . . . .	L 	 000003BC ui512md	
-  D3 . . . . . . . . . . . . . .	L 	 00000494 ui512md	
-  @retest  . . . . . . . . . . .	L 	 000004C9 ui512md	
-  @5 . . . . . . . . . . . . . .	L 	 000004F7 ui512md	
-  @adj . . . . . . . . . . . . .	L 	 00000502 ui512md	
-  D4 . . . . . . . . . . . . . .	L 	 0000052D ui512md	
-  D8UnNormalize  . . . . . . . .	L 	 00000583 ui512md	
-  cleanupret . . . . . . . . . .	L 	 000005B8 ui512md	
-  exit . . . . . . . . . . . . .	L 	 000005F4 ui512md	
-  divbyzero  . . . . . . . . . .	L 	 000005F5 ui512md	
+  normf  . . . . . . . . . . . .	Word	 rbp - 000001DA
+  jIdx . . . . . . . . . . . . .	Word	 rbp - 000001DC
+  dimM . . . . . . . . . . . . .	Word	 rbp - 000001DE
+  dimN . . . . . . . . . . . . .	Word	 rbp - 000001E0
+  padding2 . . . . . . . . . . .	QWord	 rbp - 00000260
+  mbynDiv  . . . . . . . . . . .	L 	 000003B8 ui512md	
+  D3 . . . . . . . . . . . . . .	L 	 000004A6 ui512md	
+  D4 . . . . . . . . . . . . . .	L 	 000004D8 ui512md	
+  D5 . . . . . . . . . . . . . .	L 	 00000532 ui512md	
+  D6 . . . . . . . . . . . . . .	L 	 00000549 ui512md	
+  D7 . . . . . . . . . . . . . .	L 	 00000549 ui512md	
+  D8UnNormalize  . . . . . . . .	L 	 0000055F ui512md	
+  cleanupret . . . . . . . . . .	L 	 00000594 ui512md	
+  exit . . . . . . . . . . . . .	L 	 000005D0 ui512md	
+  divbyzero  . . . . . . . . . .	L 	 000005D1 ui512md	
 mult_uT64  . . . . . . . . . . .	P 	 000001EB ui512md	Length= 000000F7 Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   product  . . . . . . . . . . .	QWord	 rbp - 00000080
