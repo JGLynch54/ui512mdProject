@@ -79,11 +79,15 @@ EXTERNDEF	not_u:PROC
 ;   // find most significant bit in supplied source 512bit (8 QWORDS)
 ;	// s16 msb_u( u64* );
 ;   // returns: -1 if no most significant bit, bit number otherwise, bits numbered 0 to 511 inclusive
+;			Note:	a returned zero means the significant bit is bit0 of the eighth word of the 512bit source parameter; (the right most bit)
+;					a returned 511 means bit63 of the first word (the left most bit)
 EXTERNDEF	msb_u:PROC
 
 ;   // find least significant bit in supplied source 512bit (8 QWORDS)
 ;	// s16 lsb_u( u64* );
 ;   // returns: -1 if no least significant bit, bit number otherwise, bits numbered 0 to 511 inclusive
+;			Note:	a returned zero means the significant bit is bit0 of the eighth word of the 512bit source parameter; (the right most bit)
+;					a returned 511 means bit63 of the first word (the left most bit)
 EXTERNDEF	lsb_u:PROC
 
 ENDIF

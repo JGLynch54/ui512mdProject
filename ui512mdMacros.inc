@@ -105,13 +105,13 @@ CreateFrame	MACRO			argsize, argsavename
 ;			LOCAL		padding2[8]:QWORD				; after your return statement, before ENDP, might LEA padding1 and padding2 to eliminate warning (unreferenced variables)
 ;			CREATEFRAME 200h, savedRBP (200h assumes 118h in those "some local variable declarations", adjust as necessary)
 ;
-;			Use only one return from the PROC, and immediately before return, use RELEASEFRAME macro, giving name of where RBP is saved
+;			Use only one return from the PROC, and immediately before return, use ReleaseFrame macro, giving name of where RBP is saved
 ;
 			PUSH			RBP
 			MOV				RBP, RSP
-			ADD				RSP, -(( argsize / 8 ) * ( 8 + 1 )); make gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
+			AND				RSP, -8
+			SUB				RSP, argsize + 64			; make a gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
 			MOV				RAX, -64					; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
-			AND				RSP, RAX
 			AND				RAX, RBP					; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
 			XCHG			RAX, RBP					; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
 			MOV				argsavename, RAX			; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
@@ -122,11 +122,11 @@ CreateFrame	MACRO			argsize, argsavename
 ReleaseFrame MACRO			argsavename
 ;			release memory set up by createframe macro
 ;			restores RSP, and RBP to as-called values
-;			after these instructions are executed, no LOCAL variables can be accessed
+;			after these instructions are executed, LOCAL variables can NOT be accessed
 ;			This needs to be done to restore the stack correctly, but can be done only once
 ;			Strongly suggest doing this just prior to return instruction, and that there is only one return instruction from the PROC
-			MOV				RBP, argsavename
-			LEAVE										; restore stack pointer (eliminating LOCAL storage), restore base pointer for caller
+			MOV				RSP, argsavename			; restore unadjusted / unrounded (the as when called) stack pointer (eliminating LOCAL storage) 
+			POP				RBP							; restore base pointer for caller
 			ENDM
 
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------

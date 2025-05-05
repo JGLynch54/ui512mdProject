@@ -716,7 +716,22 @@ namespace ui512mdTests
 			alignas (64) u64 expectedremainder[8]{ 0 };
 			alignas (64) u64 quotient[8]{ 0 };
 			alignas (64) u64 remainder[8]{ 0 };
-
+			s16 retval = 0;
+			//	Pre-testing, various sizes of dividend / divisor
+			for (int i = 7; i >= 0; i--)
+			{
+				for (int j = 7; j >= 0; j--)
+				{
+					zero_u(dividend);
+					zero_u(divisor);
+					dividend[i] = RandomU64(&seed);
+					divisor[j] = RandomU64(&seed);
+					if ((i == 5 && j == 6) || (i == 6 && j == 7)) {
+						break;
+					}
+					retval = div_u(quotient, remainder, dividend, divisor);
+				};
+			};
 
 			// First test, a simple divide by two. 
 			// Easy to check as the expected answer is a shift right,
@@ -751,7 +766,6 @@ namespace ui512mdTests
 			Logger::WriteMessage(runmsg1.c_str());
 			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
-
 			// Second test, a simple divide by sequential powers of two. 
 			// Still relatively easy to check as expected answer is a shift right,
 			// and expected remainder is a shift left
@@ -784,7 +798,7 @@ namespace ui512mdTests
 					for (int j = 0; j < 8; j++)
 					{
 						Assert::AreEqual(expectedquotient[j], quotient[j],
-							MSG(L"Quotient at " << j << " failed " << nrShift << i));
+							MSG(L"Quotient at " << j << " failed " << nrShift << " at " << i));
 						Assert::AreEqual(expectedremainder[j], remainder[j],
 							MSG(L"Remainder failed at " << j << " on " << nrShift << " at " << i));
 					}
