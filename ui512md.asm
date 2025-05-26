@@ -104,20 +104,20 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 
 ; Examine multiplicand, save dimensions, handle edge cases of zero or one
 				MOV				RCX, R8								; examine multiplicand
-				CALL			msb_u
+				CALL			msb_u								; get count to most significant bit (-1 if no bits)
 				CMP				AX, -1								; multiplicand = 0? exit with product = 0
 				JE				@@zeroandexit
 				CMP				AX, 0								; multiplicand = 1?	exit with product = multiplier
 				MOV				RDX, R9								; address of multiplier (to be copied to product)
 				JE				@@copyandexit
-				SHR				AX, 6								; divide by 64 to get Nr words
+				SHR				AX, 6								; divide msb by 64 to get Nr words
 				MOV				CX, 7 
 				SUB				CX, AX								; subtract from 7 to get starting (high order) begining index
 				MOV				candl, CX							; save off multiplicand index lower limit (eliminate multiplying leading zero words)
 
 ; Examine multiplier, save dimensions, handle edge cases of zero or one
 				MOV				RCX, R9								; examine multiplier
-				CALL			msb_u
+				CALL			msb_u								; get count to most significant bit (-1 if no bits)
 				CMP				AX, -1								; multiplier = 0? exit with product = 0
 				JE				@@zeroandexit
 				CMP				AX, 0								; multiplier = 1? exit with product = multiplicand
@@ -128,39 +128,39 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				SUB				CX, AX
 				MOV				plierl, CX							; save off multiplier index lower limit (eliminate multiplying leading zero words)
 
-; In heap / frame / stack reserved memory, clear 16 qword area for overflow/product; set up indexes for loop
+; In frame / stack reserved memory, clear 16 qword area for working version of overflow/product; set up indexes for loop
 				LEA				RCX, product [ 0 ]
-				Zero512			RCX									; clear working copy of overflow, need to start as zero, results are added in
+				Zero512			RCX									; clear working copy of overflow, need to start as zero, results are accumulated
 				LEA				RCX, product [ 8 * 8 ]
 				Zero512			RCX									; clear working copy of product (they need to be contiguous, so using working copy, not callers)
-				MOV				R11, 7								; index for multiplier (reduced until less then saved plierl)
-				MOV				R12, R11							; index for multiplicand (reduced until less than saved candl)
+				MOV				R11, 7								; index for multiplier (reduced until less than saved plierl) (outer loop)
+				MOV				R12, R11							; index for multiplicand (reduced until less than saved candl) (inner loop)
 
-; multiply loop: an outer loop for each non-zero qword of multiplicand, with an inner loop for each non-zero qword of multiplier
+; multiply loop: an outer loop for each non-zero qword of multiplicand, with an inner loop for each non-zero qword of multiplier, results accumulated in 'product'
 @@multloop:
 				MOV				R10, R11							; R10 holds index for overflow / product work area (results)
 				ADD				R10, R12
 				INC				R10									; index for product/overflow 
 				MOV				RAX, [ R8 ] + [ R12 * 8 ]			; get qword of multiplicand
 				MUL				Q_PTR [ R9 ] + [ R11 * 8 ]			; multiply by qword of multiplier
-				ADD				product [ R10 * 8 ], RAX
+				ADD				product [ R10 * 8 ], RAX			; accummulate in product, this is low-order 64 bits of result of mul
 				DEC				R10									; preserves carry flag
 @@:
-				ADC				product [ R10 * 8 ], RDX
+				ADC				product [ R10 * 8 ], RDX			; high-order result of 64bit multiply, plus the carry (if any)
 				MOV				RDX, 0								; again, preserves carry flag
-				JNC				@F
-				DEC				R10
+				JNC				@F									; if adding caused carry, propagate it, else next 
+				DEC				R10									; propagating carry
 				JGE				@B
 @@:																	; next qword of multiplicand
 				DEC				R12
-				CMP				R12W, candl
-				JGE				@@multloop
-				MOV				R12, 7
-				DEC				R11
-				CMP				R11W, plierl
-				JGE				@@multloop							; next qword of multiplier
+				CMP				R12W, candl							; Done with inner loop?
+				JGE				@@multloop							; no, do it again
+				MOV				R12, 7								; yes, reset inner loop (multiplicand) index
+				DEC				R11									; decrement index for outer loop
+				CMP				R11W, plierl						; done with outer loop?
+				JGE				@@multloop							; no, do it again with next qword of multiplier
 
-; copy working product/overflow to callers product / overflow
+; finished: copy working product/overflow to callers product / overflow
 				MOV				RCX, savedRCX
 				LEA				RDX, product [ 8 * 8 ]
 				Copy512			RCX, RDX							; copy working product to callers product
@@ -209,35 +209,35 @@ mult_u			ENDP
 				OPTION			EPILOGUE:none
 mult_uT64		PROC			PUBLIC
 				
-				CheckAlign		RCX
-				CheckAlign		R8
+				CheckAlign		RCX									; (out) Product
+				CheckAlign		R8									; (in) Multiplicand
 
-; caller might be doing multiply 'in-place', so need to save the original multiplicand, prior to clearing callers product
+; caller might be doing multiply 'in-place', so need to save the original multiplicand, prior to clearing callers product (A = A * x), or (A *= x)
 				FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
-				PUSH			Q_PTR [ R8 ] [ idx * 8 ]
+				PUSH			Q_PTR [ R8 ] + [ idx * 8 ]
 				ENDM
 
 ; clear callers product and overflow
 ;	Note: if caller used multiplicand and product as the same variable (memory space),
 ;	this would wipe the multiplicand. Hence the saving of the multiplicand on the stack. (above)
 				XOR				RAX, RAX
-				Zero512			RCX									; clear callers product (multiply uses an additive carry, so it needs to be zeroed)
-				MOV				[ RDX ], RAX						; clear callers overflow
+				Zero512			RCX, "Q"   							; clear callers product (multiply uses an additive carry, so it needs to start zeroed)
+				MOV				Q_PTR [ RDX ], RAX					; clear callers overflow
  				MOV				R10, RDX							; RDX (pointer to callers overflow) gets used in the MUL: save it in R10
 
-; FOR EACH index of 7 thru 1 (omiting 0): fetch qword of multiplicand, multiply, add 128 bit (RAX, RDX) to running working
-				FOR				idx, <7, 6, 5, 4, 3, 2, 1>
+; FOR EACH index of 7 thru 1 (omiting 0): fetch (pop) qword of multiplicand, multiply, add 128 bit result (RAX, RDX) to running working product
+				FOR				idx, < 7, 6, 5, 4, 3, 2, 1 >		; Note: this is not a 'real' for, this is a macro that generates an unwound loop
 				POP				RAX									; multiplicand [ idx ] qword -> RAX
 				MUL				R9									; times multiplier -> RAX, RDX
-				ADD				[ RCX ] [ idx * 8 ], RAX			; add RAX to working product [ idx ] qword
-				ADC				[ RCX ] [ (idx - 1) * 8 ], RDX		; and add with carry to [ idx - 1 ] qword of working product
+				ADD				Q_PTR [ RCX ] + [ idx * 8 ], RAX	; add RAX to working product [ idx ] qword
+				ADC				Q_PTR [ RCX ] + [ (idx - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
 				ENDM
 
 ; Most significant (idx=0), the high order result of the multiply in RDX, goes to the overflow of the caller
 				POP				RAX
 				MUL				R9
-				ADD				[ RCX ] [ 0 * 8 ], RAX
-				ADC				[ R10 ], RDX						; last qword overflow is also the operation overflow
+				ADD				Q_PTR [ RCX ] + [ 0 * 8 ], RAX
+				ADC				Q_PTR [ R10 ], RDX						; last qword overflow is also the operation overflow
 				XOR				RAX, RAX							; return zero
 				RET
 mult_uT64		ENDP
@@ -261,8 +261,7 @@ div_u			PROC			PUBLIC
 				LOCAL			currnumerator [ 16 ] : QWORD
 				LOCAL			qdiv [ 16 ] : QWORD, quotient [ 8 ] : QWORD, normdivisor [ 8 ] : QWORD
 				LOCAL			savedRCX : QWORD, savedRDX : QWORD, savedR8 : QWORD, savedR9 : QWORD
-				LOCAL			savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD
-				LOCAL			savedRBP : QWORD
+				LOCAL			savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD, savedRBP : QWORD
 				LOCAL			qHat : QWORD, rHat : QWORD,	nDiv : QWORD, addbackRDX : QWORD, addbackR11 : QWORD
 				LOCAL			normf : WORD, jIdx : WORD, mIdx : WORD, nIdx : WORD, mDim : WORD, nDim : Word			
 				LOCAL			padding2 [ 16 ] : QWORD
@@ -284,31 +283,29 @@ div_oset		EQU				padding2 + 64 - padding1
 
 ; Initialize
 				Zero512			RCX									; zero callers quotient
-				MOV				RCX, RDX
-				Zero512			RCX									; zero callers remainder
+				Zero512			RDX									; zero callers remainder
 				LEA				RCX, quotient
 				Zero512			RCX									; zero working quotient
 
  ; Examine divisor
 				MOV				RCX, R9								; divisor
-				CALL			msb_u								; most significant bit
+				CALL			msb_u								; get most significant bit
 				CMP				AX, -1								; msb < 0? 
 				JE				divbyzero							; divisor is zero, abort
 				CMP				AX, 64								; divisor only one 64-bit word?
-				JMP				mbynDiv								; no, do divide of m digit by n digit				*** NOTE: restore JGE after testing (allows full div on single word)
+				JMP				mbynDiv								; no, do divide of m digit by n digit				*** NOTE: restore JGE after testing (this allows full div on single word)
 
 ;	divide of m 64-bit qwords by one 64 bit qword divisor, use the quicker divide routine (div_uT64), and return
 				MOV				RCX, savedRCX						; set up parms for call to div by 64bit: RCX - addr of quotient
 				MOV				RDX, savedRDX						; RDX - addr of remainder
-				Zero512			RDX									
 				MOV				R8, savedR8							; R8 - addr of dividend
 				MOV				RAX, savedR9
-				MOV				R9, Q_PTR [RAX + 7 * 8 ]			; R9 - value of 64 bit divisor
+				MOV				R9, Q_PTR [ RAX ] + [ 7 * 8 ]		; R9 - value of 64 bit divisor
 				CALL			div_uT64
 				MOV				RDX, savedRDX						; move 64 bit remainder to last word of 8 word remainder
 				MOV				RCX, Q_PTR [ RDX ]					; get the one qword remainder
 				Zero512			RDX									; clear the 8 qword callers remainder
-				MOV				[ RDX ] [ 7 * 8 ], RCX				; put the one qword remainder in the least significant qword of the callers remainder
+				MOV				Q_PTR [ RDX ] + [ 7 * 8 ], RCX		; put the one qword remainder in the least significant qword of the callers remainder
 				JMP				cleanupret
 
 ;
@@ -355,7 +352,7 @@ mbynDiv:
 				LEA				RDX, currnumerator					; zero first eight words of working enumerator
 				Zero512			RDX
 				MOV				RDX, savedR8
-				MOV				RAX, [ RDX ]						; if numerator has 8 qwords (dimM = 7), then the shift just lost us high order bits, get them			
+				MOV				RAX, Q_PTR [ RDX ]					; if numerator has 8 qwords (dimM = 7), then the shift just lost us high order bits, get them			
 				MOV				CX, 63								; shift first qword of dividend right 
 				SUB				CX, normf							; by 63 minus Nr bits shifted left
 				SHR				RAX, CL								; eliminating all bit the bits we lost
@@ -365,13 +362,13 @@ mbynDiv:
 				XOR				RAX, RAX
 				MOV				RCX, -1
 @@:
-				TEST			[ R12 ] + [ RAX * 8 ], RCX			; R12 currently has addr of begining of enumerator, 
+				TEST			Q_PTR [ R12 ] + [ RAX * 8 ], RCX	; R12 currently has addr of begining of enumerator, 
 				JNZ				@F
 				INC				RAX
 				CMP				RAX, 8
 				JLE				@B
 @@:
-				LEA				R12, [ R12 ] + [ RAX * 8 ]			; revise begining address of working numerator with address of first non-zero qword
+				LEA				R12, Q_PTR [ R12 ] + [ RAX * 8 ]	; revise begining address of working numerator with address of first non-zero qword
 				LEA				RCX, [ 9 ]
 				SUB				CX, AX
 				MOV				mDim, CX
@@ -387,9 +384,9 @@ mbynDiv:
 ;			Step D3: Calculate  q^
 D3:
 				MOVZX			RCX, jIdx
-				MOV				RDX, [ R12 ] + [ RCX * 8 ]
+				MOV				RDX, Q_PTR [ R12 ] + [ RCX * 8 ]
 				INC				RCX
-				MOV				RAX, [ R12 ] + [ RCX * 8 ]
+				MOV				RAX, Q_PTR [ R12 ] + [ RCX * 8 ]
 				DIV				nDiv
 				MOV				qHat, RAX
 				MOV				rHat, RDX
@@ -423,14 +420,14 @@ D6:
 				MOV				R10, addbackR11
 				CLC													; Carry indicator
 @@:
-				MOV				RAX, [ R11 ] + [ RDX * 8 ]
-				LEA				RCX, [ R12 ] + [ 1 * 8 ]
-				ADC				[ RCX ] + [ RDX * 8 ], RAX
+				MOV				RAX, Q_PTR [ R11 ] + [ RDX * 8 ]
+				LEA				RCX, Q_PTR [ R12 ] + [ 1 * 8 ]
+				ADC				Q_PTR [ RCX ] + [ RDX * 8 ], RAX
 				DEC				RDX
 				DEC				R10
 				JNS				@B
 				MOV				RAX, qdiv [ 7 * 8 ]
-				ADC				[ R12 ] + [ RDX * 8 ], RAX
+				ADC				Q_PTR [ R12 ] + [ RDX * 8 ], RAX
 
 ;			Step D7: Loop on j
 D7:
@@ -488,8 +485,8 @@ div_u			ENDP
 				OPTION			EPILOGUE:none
 div_uT64		PROC			PUBLIC
 
-				CheckAlign		RCX
-				CheckAlign		R8
+				CheckAlign		RCX									; (out) Quotient
+				CheckAlign		R8									; (in) Dividend
 
 ; Test divisor for divide by zero				
 				TEST			R9, R9
@@ -501,13 +498,13 @@ div_uT64		PROC			PUBLIC
 
 ; FOR EACH index of 0 thru 7: get qword of dividend, divide by divisor, store qword of quotient
 				FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
-				MOV				RAX, Q_PTR [ R8 ] [ idx * 8 ]		; dividend [ idx ] -> RAX
-				DIV				R9									; divide by divisor in R9
-				MOV				[ RCX ] [ idx * 8 ], RAX			; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+				MOV				RAX, Q_PTR [ R8 ] + [ idx * 8 ]	; dividend [ idx ] -> RAX
+				DIV				R9									; divide by divisor in R9 (as passed)
+				MOV				Q_PTR [ RCX ] + [ idx * 8 ], RAX	; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
 				ENDM
 
 ; Last (least significant qword) divide leaves a remainder, store it at callers remainder
-				MOV				[ R10 ], RDX						; remainder to callers remainder
+				MOV				Q_PTR [ R10 ], RDX					; remainder to callers remainder
 				XOR				RAX, RAX							; return zero
 @@exit:			
 				RET
@@ -516,9 +513,31 @@ div_uT64		PROC			PUBLIC
 @@DivByZero:
 				Zero512			RCX									; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
 				XOR				RAX, RAX
-				MOV				[ R10 ] , RAX
+				MOV				Q_PTR [ R10 ] , RAX
 				DEC				EAX									; return error (div by zero)
 				JMP				@@exit
 div_uT64		ENDP
 
+
+;
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
+;			EXTERNDEF		reg_verify:PROC	;	void reg_verify ( u64* reg struct)
+;			div_uT64		-	divide 512 bit dividend by 64 bit divisor, giving 512 bit quotient and 64 bit remainder
+				OPTION			PROLOGUE:none
+				OPTION			EPILOGUE:none
+reg_verify		PROC			PUBLIC
+
+				MOV				Q_PTR [ RCX ] + [ 0 * 8 ], R12
+				MOV				Q_PTR [ RCX ] + [ 1 * 8 ], R13
+				MOV				Q_PTR [ RCX ] + [ 2 * 8 ], R14
+				MOV				Q_PTR [ RCX ] + [ 3 * 8 ], R15
+				MOV				Q_PTR [ RCX ] + [ 4 * 8 ], RDI
+				MOV				Q_PTR [ RCX ] + [ 5 * 8 ], RSI
+				MOV				Q_PTR [ RCX ] + [ 6 * 8 ], RBX
+				MOV				Q_PTR [ RCX ] + [ 7 * 8 ], RBP
+				MOV				Q_PTR [ RCX ] + [ 8 * 8 ], RSP
+
+				RET
+
+reg_verify		ENDP
 				END

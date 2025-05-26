@@ -59,6 +59,25 @@ namespace ui512mdTests
 		const s32 runcount = 1000;
 		const s32 timingcount = 10000000;
 
+		struct regs {
+			//  R12, R13, R14, R15, RDI, RSI, RBX, RBP, RSP 
+			u64	R12;
+			u64 R13;
+			u64	R14;
+			u64	R15;
+			u64 RDI;
+			u64 RSI;
+			u64 RBX;
+			u64 RBP;
+			u64 RSP;
+
+			void Clear() {
+				R12 = R13 = R14 = R15 = 0;
+				RDI = RSI = RBX = RBP = 0;
+				RSP = 0;
+			}
+		};
+
 		/// <summary>
 		/// Random number generator
 		/// uses linear congruential method 
@@ -78,7 +97,7 @@ namespace ui512mdTests
 
 		TEST_METHOD(random_number_generator)
 		{
-			//	Check distibution of "random" numbers
+			//	Check distribution of "random" numbers
 			u64 seed = 0;
 			const u32 dec = 10;
 			u32 dist[dec]{ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -89,7 +108,7 @@ namespace ui512mdTests
 			float deviation = 0.0;
 			float D = 0.0;
 			float sumD = 0.0;
-			float varience = 0.0;
+			float variance = 0.0;
 			const u32 randomcount = 1000000;
 			const s32 norm = randomcount / dec;
 			for (u32 i = 0; i < randomcount; i++)
@@ -111,10 +130,10 @@ namespace ui512mdTests
 				deviation = float(abs(long(norm) - long(dist[i])));
 				D = (deviation * deviation) / float(long(norm));
 				sumD += D;
-				varience = float(deviation) / float(norm) * 100.0f;
-				varsum += varience;
+				variance = float(deviation) / float(norm) * 100.0f;
+				varsum += variance;
 				msgd += format("\t{:6d}", dist[i]);
-				msgv += format("\t{:5.3f}% ", varience);
+				msgv += format("\t{:5.3f}% ", variance);
 				msgchi += format("\t{:5.3f}% ", D);
 				distc += dist[i];
 			};
@@ -508,6 +527,39 @@ namespace ui512mdTests
 			Logger::WriteMessage(runmsg.c_str());
 		};
 
+		TEST_METHOD(ui512md_01_mul_pnv)
+		{
+			// Path and non-volatile reg tests
+
+			u64 seed = 0;
+			alignas (64) u64 num1[8]{ 0 };
+			alignas (64) u64 num2[8]{ 0 };
+			alignas (64) u64 product[8]{ 0 };
+			alignas (64) u64 overflow[8]{ 0 };
+			regs* prior = new regs{ 0,0,0,0,0,0,0,0,0 };
+			regs* post = new regs{ 0,0,0,0,0,0,0,0,0 };
+
+			for (int i = 0; i < 8; i++)
+			{
+				num1[i] = RandomU64(&seed);
+				num2[i] = RandomU64(&seed);
+			}
+
+			for (int i = 0; i < runcount; i++)
+			{
+				prior->Clear();
+				post->Clear();
+				reg_verify((u64*)prior);
+				mult_u(product, overflow, num1, num2);
+				reg_verify((u64*)post);
+
+			};
+
+			string runmsg = "Multiply function:  path and non-volatile reg tests. Ran " +
+				to_string(runcount) + " times.\n";
+			Logger::WriteMessage(runmsg.c_str());
+			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+		};
 		TEST_METHOD(ui512md_02_mul64)
 		{
 			// mult_u tests
