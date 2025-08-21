@@ -1,4 +1,6 @@
-.NOLIST
+IFNDEF		legalnotes
+legalnotes	EQU		1
+.LIST
 ;
 ;			ui512aMacros
 ;
@@ -15,13 +17,15 @@
 ;               ui512md provides multiply and divide.
 ;
 ;				It is written in assembly language, using the MASM (ml64) assembler provided as an option within Visual Studio.
-;				(currently using VS Community 2022 17.9.6)
+;				(currently using VS Community 2022 17.14.10)
 ;
 ;				It provides external signatures that allow linkage to C and C++ programs,
 ;				where a shell/wrapper could encapsulate the methods as part of an object.
 ;
 ;				It has assembly time options directing the use of Intel processor extensions: AVX4, AVX2, SIMD, or none:
 ;				(Z (512), Y (256), or X (128) registers, or regular Q (64bit)).
+;
+;				Note: The file "compile_time_options.inc" contains the options that can be configured for extension usage, and other options.
 ;
 ;				If processor extensions are used, the caller must align the variables declared and passed
 ;				on the appropriate byte boundary (e.g. alignas 64 for 512)
@@ -55,9 +59,12 @@
 ;				OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 ;				SOFTWARE.
 ;
-.LIST
+
+ENDIF			; legalnotes
+
 IFNDEF			ui512aMacros_INC
 ui512aMacros_INC EQU			<1>
+
 
 ;           header file equivalent extern declarations
 ;			EXTERN "C" signatures (from ui512a.asm)
@@ -65,6 +72,7 @@ ui512aMacros_INC EQU			<1>
 ;	// void zero_u ( u64* destarr ); 
 ;	// fill supplied 512bit (8 QWORDS) with zero
 EXTERNDEF		zero_u:PROC
+
 
 ;	// void copy_u ( u64* destarr, u64* srcarr );
 ;	// copy supplied 512bit (8 QWORDS) source to supplied destination
@@ -103,18 +111,10 @@ EXTERNDEF		sub_u:PROC
 ;	// subtract supplied 64 bit right hand (64 bit value) op from left hand (512 bit) giving difference
 ;	// returns: zero for no borrow, 1 for borrow (underflow)
 EXTERNDEF		sub_uT64:PROC
-
-;			Configuration choices
-__UseZ			EQU				1									; Use AVX4 processor features (512 bit registers and instructions)
-__UseY			EQU				0									; Use AVX2 processor features (256 bit registers and instructions)
-__UseX			EQU				0									; Use SIMD/SSE processor features (128 bit registers and instructions)
-__UseQ			EQU				1									; Do not use extensions, use standard x64 bit registers and instructions
 ;
-__CheckAlign	EQU				0									; User is expected to pass arguments aligned on 64 byte boundaries, 
-																	; This setting enforces that with a check. It should not be necessary, but included to help debugging
 
 ;           Some coding shortcuts
-ZM_PTR			EQU				ZMMWORD PTR
+ZM_PTR			EQU				ZMMWORD PTR 
 YM_PTR			EQU				YMMWORD PTR
 XM_PTR			EQU				XMMWORD PTR
 Q_PTR			EQU				QWORD PTR
@@ -123,7 +123,7 @@ W_PTR			EQU				WORD PTR
 B_PTR			EQU				BYTE PTR
 m32BCST			EQU				DWORD BCST
 m64BCST			EQU				QWORD BCST
-
+LPVOID			TYPEDEF			PTR VOID
 ;			mask codes (for compares using instructions like VPCMPUQ)
 CPEQ			EQU				0
 CPLT			EQU				1
@@ -146,15 +146,42 @@ MaskBit7		EQU				B_PTR [ 10000000b ]
 
 ;			Another way to get masks
 kMask			RECORD			b8:1, b7:1, b6:1, b5:1, b4:1, b3:1, b2:1, b1:1, b0:1
-;==========================================================================================
-;           Notes on x64 calling conventions        aka "fast call"
+
+;
+; MemConstants <none>
+;
+;		Define useful constants
+;
+MemConstants	MACRO
+
+qOnes			QWORD           8 DUP (0ffffffffffffffffh)
+;
+zeroQ			DQ				0
+mskHex100		DD				0100h
+;		Return codes commonly used.			
+ret0			DD				0								
+ret1			DD				1
+ret_minus_1		DD				-1
+;		Masks commonly used
+mskAll8			DB				255
+mskB0			DB				1
+mskB1			DB				2
+mskB2			DB				4
+mskB3			DB				8
+mskB4			DB				16
+mskB5			DB				32
+mskB6			DB				64
+mskB7			DB				128
+
+				ENDM
+
+;==================================================================================================
+;           Notes on x64 calling conventions        specifically "fast call"
 ; ref: https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170
-; The first four parameters are passed in registers: RCX, RDX, R8, R9 if integer or address
+; The callers first four parameters are passed in registers: RCX, RDX, R8, R9 if integer or address
 ; if floating point XMM0L, XMM1L, XMM2L, XMM3L
 ; return (if any) is in EAX
-;===========================================================================================
 ;
-;===========================================================================================
 ; RAX, RCX, RDX, R8, R9, R10, R11 are considered volatile, and do not need to be saved
 ; XMM0, YMM0, ZMM0 and  ..1, ..2, ..3, ..4, and ..5 are considered volatile,
 ;	and do not need to be saved
@@ -166,136 +193,210 @@ kMask			RECORD			b8:1, b7:1, b6:1, b5:1, b4:1, b3:1, b2:1, b1:1, b0:1
 ; A "leaf" function is one that does not call and does not change non volatile registers
 ; leaf functionss therefore do not need frame, prolog or epilog
 ;
-;===========================================================================================
+;==================================================================================================
 
+;==================================================================================================
+; Selected macros from "macamd64.inc" (c) Microsoft Corporation
+;	These macros generate .xdata and .pdata entries in the executable image file.
+;	The entries assist in exception and debugging; helping 'unwind' operations.
+;	Only a few macros are included, and are reformatted to match coding style:
+;	indents and capitalization.
+;
+; LEAF_ENTRY <Name>, <Section>, <NoPad>
+;
+; Macro Description:
+;
+;   This macro indicates the beginning of a leaf function.
+;
+;   A leaf function is one that DOES NOT:
+;
+;   - manipulate non-volatile registers
+;   - manipulate the stack pointer
+;   - call other functions
+;   - reference an exception handler
+;   - contain a prologue
+;   - have any unwind data associated with it
+;
+; Arguments:
+;
+;   Name - Supplies the name of the function
+;
+;   Section - Supplies the name of the section within which the function
+;             is to appear
+;
+;   NoPad - If present, indicates that the function should not be prefixed
+;           with 6 bytes of padding.  This is for internal use only - the
+;           calling standard dictates that functions (nested and leaf) must
+;           be prefixed with padding.
+;
+Leaf_Entry		MACRO			Name, Section
+Section			SEGMENT			PARA 'CODE'
+				DB				6 DUP (0cch)
+				ALIGN			16
+				PUBLIC			Name
+Name			PROC			FRAME
+				.ENDPROLOG
+				ENDM
+
+;
+; LEAF_END <Name>, <Section>
+;
+; Macro Description:
+;
+;   This macro indicates the end of a leaf function.  It must be paired
+;   with a LEAF_ENTRY macro that includes matching Name and Section
+;   parameters.
+;
+; Arguments:
+;
+;   Name - Supplies the name of the function.  Must match that supplied to
+;          the corresponding LEAF_ENTRY macro.
+;
+;   Section - Supplies the name of the section within which the function
+;             is to appear.  Must match that supplied to the corresponding
+;             LEAF_ENTRY macro.
+;
+Leaf_End		MACRO			Name, Section
+Name			ENDP
+Section			ENDS
+				ENDM
 
 ;===========================================================================================
 ;          Local macros
 ;===========================================================================================
 
 ;
+; CheckAlign <RAddr>
+;
 ;			Test passed variable addresses for 64 byte alignment
 ;			Note: Better performance if this is off, but for debugging, maybe have it on
 ;
+
 CheckAlign		MACRO			Raddr
 				LOCAL			ok
 	IF	__CheckAlign
 				TEST			Raddr, 63							; Is specified param aligned 64?
 				JZ				ok									; Yes, passes test, continue
-				INT				0									; No? fails, break (can substitute other exception handling)
+				INT				13									; No? fails, break (can substitute other exception handling)
 ok:
 	ENDIF
 				ENDM
 
-MemConstants	MACRO
 ;
-zeroQ			DQ				0
-mskHex100		DD				0100h
-;		Return codes commonly used.			
-ret0			DD				0								
-ret1			DD				1
-ret_1			DD				-1
-;		Masks commonly used
-mskAll8			DB				255
-mskB0			DB				1
-mskB1			DB				2
-mskB2			DB				4
-mskB3			DB				8
-mskB4			DB				16
-mskB5			DB				32
-mskB6			DB				64
-mskB7			DB				128
+; VerifyRegs <none>
 ;
-				ALIGN			8									; realign
+;			If option is on, generate a function, callable by unit test routines, 
+;				to save non-volatile registers in passed structure.
+;
+IF	__VerifyRegs
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
+;			EXTERNDEF		reg_verify:PROC	;	void reg_verify ( u64* regstruct)
+;			reg_verify		-	copy non-volatile regs into callers struct of nine qwords) intended for unit tests to verify non-volatile regs are not changed
+;			Prototype:		-	void reg_verify( uu64* regstruct);
+;			regstruct		-	Address of 9 QWORDS in a struct where regs will be copied (in RCX)
+; //			reg_verify		-	save non-volatile regs for verification (debug)
+; //			Prototype		-	void reg_verify ( u64* reg struct)
+EXTERNDEF		reg_verify:PROC	;	void reg_verify ( u64* reg struct)
+
+VerifyRegs		MACRO
+				Leaf_Entry		reg_verify, ui512
+				MOV				Q_PTR [ RCX ] [ 0 * 8 ], R12
+				MOV				Q_PTR [ RCX ] [ 1 * 8 ], R13
+				MOV				Q_PTR [ RCX ] [ 2 * 8 ], R14
+				MOV				Q_PTR [ RCX ] [ 3 * 8 ], R15
+				MOV				Q_PTR [ RCX ] [ 4 * 8 ], RDI
+				MOV				Q_PTR [ RCX ] [ 5 * 8 ], RSI
+				MOV				Q_PTR [ RCX ] [ 6 * 8 ], RBX
+				MOV				Q_PTR [ RCX ] [ 7 * 8 ], RBP
+				MOV				Q_PTR [ RCX ] [ 8 * 8 ], RSP
+				RET
+				Leaf_End		reg_verify, ui512
 				ENDM
+ENDIF
 
 ;
 ;			Zero a 512 bit destination, conditional assembly based on configuration parameters
 ;
-Zero512			MACRO			dest:REQ, expand:=<" ">
-	IF		__UseZ AND expand NE "Q"
+Zero512			MACRO			dest:REQ
+	IF		__UseZ
 				CheckAlign		dest
 				VPXORQ			ZMM31, ZMM31, ZMM31
 				VMOVDQA64		ZM_PTR [ dest ], ZMM31
-	ELSEIF	__UseY AND expand NE "Q"
+	ELSEIF	__UseY
 				CheckAlign		dest
 				VPXORQ			YMM4, YMM4, YMM4
 				FOR				idx, < 0, 4 >
-				VMOVDQA64		YM_PTR [ dest + idx * 8 ], YMM4
+				VMOVDQA64		YM_PTR [ dest ] [ idx * 8 ], YMM4
 				ENDM
-	ELSEIF	__UseX AND expand NE "Q"
+	ELSEIF	__UseX
 				CheckAlign		dest
 				PXOR			XMM4, XMM4
 				FOR				idx, < 0, 2, 4, 6 >
-				MOVDQA			XM_PTR [ dest + idx * 8 ], XMM4
+				MOVDQA			XM_PTR [ dest ] [ idx * 8 ], XMM4
 				ENDM		
 	ELSE
 				XOR				RAX, RAX
 				FOR				idx,  < 0, 1, 2, 3, 4, 5, 6, 7 >
-				MOV				Q_PTR [ dest + idx * 8 ], RAX
+				MOV				Q_PTR [ dest ] [ idx * 8 ], RAX
 				ENDM
 	ENDIF
 				ENDM
 
+;
+;			Zero a 512 bit destination, always use Q_PTR, avoids clock penalty from using SIMD
+;
+Zero512Q		MACRO			dest:REQ
+				XOR				RAX, RAX
+				FOR				idx,  < 0, 1, 2, 3, 4, 5, 6, 7 >
+				MOV				Q_PTR [ dest ] [ idx * 8 ], RAX
+				ENDM
+
+				ENDM
 
 ;
 ;			Copy a 512 bit source to destination, conditional assembly based on configuration parameters
 ;
-Copy512			MACRO			dest:REQ, src:REQ, expand:=<" ">
-	IF		__UseZ AND expand NE "Q"
+Copy512			MACRO			dest:REQ, src:REQ
+	IF		__UseZ 
 				CheckAlign		dest
 				CheckAlign		src
 				VMOVDQA64		ZMM31, ZM_PTR [ src ]
 				VMOVDQA64		ZM_PTR [ dest ], ZMM31
-	ELSEIF	__UseY AND expand NE "Q"
+	ELSEIF	__UseY
 				CheckAlign		dest
 				CheckAlign		src
 				VMOVDQA64		YMM4, YM_PTR [ src + 0 * 8 ]
-				VMOVDQA64		YM_PTR [ dest + 0 * 8 ], YMM4	; alternate ymm regs in case pipeline can execute next without waiting for this.
-				VMOVDQA64		YMM5, YM_PTR [ src + 4 * 8 ]
-				VMOVDQA64		YM_PTR [ dest + 4 * 8 ], YMM5
-	ELSEIF	__UseX AND expand NE "Q"
-
+				VMOVDQA64		YM_PTR [ dest ] [ 0 * 8 ], YMM4	; alternate ymm regs in case pipeline can execute next without waiting for this.
+				VMOVDQA64		YMM5, YM_PTR [ src ] [ 4 * 8 ]
+				VMOVDQA64		YM_PTR [ dest ] [ 4 * 8 ], YMM5
+	ELSEIF	__UseX
 				CheckAlign		dest
 				CheckAlign		src
-				MOVDQA			XMM4, XM_PTR [ src + 0 * 8 ]
-				MOVDQA			XM_PTR [ dest + 0 * 8 ], XMM4
-				MOVDQA			XMM3, XM_PTR [ src + 2 * 8 ]
-				MOVDQA			XM_PTR [ dest + 2 * 8 ], XMM3
-				MOVDQA			XMM4, XM_PTR [ src + 4 * 8 ]
-				MOVDQA			XM_PTR [ dest + 4 * 8 ], XMM4
-				MOVDQA			XMM3, XM_PTR [ src + 6 * 8 ]
-				MOVDQA			XM_PTR [ dest + 6 * 8 ], XMM3
+				MOVDQA			XMM4, XM_PTR [ src ] [ 0 * 8 ]
+				MOVDQA			XM_PTR [ dest ] [ 0 * 8 ], XMM4
+				MOVDQA			XMM3, XM_PTR [ src ] [ 2 * 8 ]
+				MOVDQA			XM_PTR [ dest ] [ 2 * 8 ], XMM3
+				MOVDQA			XMM4, XM_PTR [ src ] [ 4 * 8 ]
+				MOVDQA			XM_PTR [ dest ] [ 4 * 8 ], XMM4
+				MOVDQA			XMM3, XM_PTR [ src ] [ 6 * 8 ]
+				MOVDQA			XM_PTR [ dest ] [ 6 * 8 ], XMM3
 	ELSE
 				FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
-				MOV				RAX, Q_PTR [ src + idx * 8 ]
-				MOV				Q_PTR [ dest + idx * 8 ], RAX
+				MOV				RAX, Q_PTR [ src ] [ idx * 8 ]
+				MOV				Q_PTR [ dest ] [ idx * 8 ], RAX
 				ENDM
 	ENDIF
 				ENDM
 
 ;
-;			Get a GP reg QWORD from within a Z register as specified by mask
-;			Note: RAX, ZMM0 and k1 are used and not restored
-;			Example usage: GetZatIdx R11, ZMM1, MaskBit2 or SetZatIdx ZMM1, R12, [ R9 ]  (where R9 is a bit mask, not an integer index)
-;			Note: These are req to reg ops; no memory fetches (other than instructions from pipeline)
+;			Copy a 512 bit source to destination, always use Q_PTR, avoids clock penalty from using SIMD
 ;
-GetZatMask		MACRO			dest, src, mask
-				LEA				RAX,  mask
-				KMOVB			k1, RAX
-				VPCOMPRESSQ		ZMM0 {k1}{z}, src
-				VMOVQ			dest, XMM0
+Copy512Q		MACRO			dest:REQ, src:REQ
+				FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
+				MOV				RAX, Q_PTR [ src ] [ idx * 8 ]
+				MOV				Q_PTR [ dest ] [ idx * 8 ], RAX
 				ENDM
 
-;
-;			Set a GP Reg QWORD within a Z register as specified by mask
-;			Note: RAX and k1 are used and not restored
-;			Example usage: SetZatIdx ZMM1, R8, MaskBit2
-;			Note: These are req to reg ops; no memory fetches (other than instructions from pipeline)
-;
-SetZatMask		MACRO			dest, src, mask
-				LEA				RAX, mask
-				KMOVB			k1, RAX
-				VPBROADCASTQ 	dest {k1}, src
 				ENDM
-ENDIF
+
+ENDIF	; IFNDEF			ui512aMacros_INC

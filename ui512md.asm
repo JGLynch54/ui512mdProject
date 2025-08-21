@@ -8,57 +8,10 @@
 ;			Legal:			Copyright @2024, per MIT License below
 ;			Date:			June 20, 2024
 ;
-;			Notes:
-;				ui512 is a small project to provide basic operations for a variable type of unsigned 512 bit integer.
-;
-;				ui512a provides basic operations: zero, copy, compare, add, subtract.
-;				ui512b provides basic bit-oriented operations: shift left, shift right, and, or, not, least significant bit and most significant bit.
-;               ui512md provides multiply and divide.
-;
-;				It is written in assembly language, using the MASM (ml64) assembler provided as an option within Visual Studio.
-;				(currently using VS Community 2022 17.9.6)
-;
-;				It provides external signatures that allow linkage to C and C++ programs,
-;				where a shell/wrapper could encapsulate the methods as part of an object.
-;
-;				It has assembly time options directing the use of Intel processor extensions: AVX4, AVX2, SIMD, or none:
-;				(Z (512), Y (256), or X (128) registers, or regular Q (64bit)).
-;
-;				If processor extensions are used, the caller must align the variables declared and passed
-;				on the appropriate byte boundary (e.g. alignas 64 for 512)
-;
-;				This module is very light-weight (less than 1K bytes) and relatively fast,
-;				but is not intended for all processor types or all environments. 
-;
-;				Use for private (hobbyist), or instructional, or as an example for more ambitious projects is all it is meant to be.
-;
-;--------------------------------------------------------------------------------------------------------------------------------------------------------------
-;
-;			MIT License
-;
-;			Copyright (c) 2024 John G. Lynch
-;
-;				Permission is hereby granted, free of charge, to any person obtaining a copy
-;				of this software and associated documentation files (the "Software"), to deal
-;				in the Software without restriction, including without limitation the rights
-;				to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-;				copies of the Software, and to permit persons to whom the Software is
-;				furnished to do so, subject to the following conditions:
-;
-;				The above copyright notice and this permission notice shall be included in all
-;				copies or substantial portions of the Software.
-;
-;				THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-;				IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-;				FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-;				AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-;				LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-;				OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-;				SOFTWARE.
-;
-;
-;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
+
+				INCLUDE			legalnotes.inc
+				INCLUDE			compile_time_options.inc
 				INCLUDE			ui512aMacros.inc
 				INCLUDE			ui512bMacros.inc
 				INCLUDE			ui512mdMacros.inc
@@ -72,7 +25,7 @@
 
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;			EXTERNDEF		mult_u:PROC					; void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
-;			mult_u			-	multiply 512 multiplicand by 512 multiplier, giving 512 product, overflow
+;			mult_u			-	multiply 512 multiplicand by 512 multiplier, giving 512 product, 512 overflow
 ;			Prototype:		-	void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
 ;			product			-	Address of 8 QWORDS to store resulting product (in RCX)
 ;			overflow		-	Address of 8 QWORDS to store resulting overflow (in RDX)
@@ -88,7 +41,7 @@ mult_u			PROC			PUBLIC
 				LOCAL			plierl : WORD						; low limit index of of multiplier (7 - first non-zero)
 				LOCAL			candl : WORD						; low limit index of multiplicand
 				LOCAL			padding2 [ 16 ] : QWORD
-mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local memmory declarations
+mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local memory declarations
 
 				CreateFrame		220h, savedRBP
 				MOV				savedRCX, RCX
@@ -96,7 +49,7 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				MOV				savedR10, R10
 				MOV				savedR11, R11
 				MOV				savedR12, R12
-
+; Check passed parameters alignment
 				CheckAlign		RCX									; (out) Product
 				CheckAlign		RDX									; (out) Overflow
 				CheckAlign		R8									; (in) Multiplicand
@@ -112,7 +65,7 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				JE				@@copyandexit
 				SHR				AX, 6								; divide msb by 64 to get Nr words
 				MOV				CX, 7 
-				SUB				CX, AX								; subtract from 7 to get starting (high order) begining index
+				SUB				CX, AX								; subtract from 7 to get starting (high order, left-most) beginning index
 				MOV				candl, CX							; save off multiplicand index lower limit (eliminate multiplying leading zero words)
 
 ; Examine multiplier, save dimensions, handle edge cases of zero or one
@@ -123,9 +76,9 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				CMP				AX, 0								; multiplier = 1? exit with product = multiplicand
 				MOV				RDX, R8								; address of multiplicand (to be copied to product)
 				JE				@@copyandexit
-				SHR				AX, 6
-				MOV				RCX, 7
-				SUB				CX, AX
+				SHR				AX, 6								; divide msb by 64 to get Nr words
+				MOV				CX, 7
+				SUB				CX, AX								; subtract from 7 to get starting (high order, left-most) beginning index
 				MOV				plierl, CX							; save off multiplier index lower limit (eliminate multiplying leading zero words)
 
 ; In frame / stack reserved memory, clear 16 qword area for working version of overflow/product; set up indexes for loop
@@ -133,7 +86,7 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				Zero512			RCX									; clear working copy of overflow, need to start as zero, results are accumulated
 				LEA				RCX, product [ 8 * 8 ]
 				Zero512			RCX									; clear working copy of product (they need to be contiguous, so using working copy, not callers)
-				MOV				R11, 7								; index for multiplier (reduced until less than saved plierl) (outer loop)
+				LEA				R11, [ 7 ] 							; index for multiplier (reduced until less than saved plierl) (outer loop)
 				MOV				R12, R11							; index for multiplicand (reduced until less than saved candl) (inner loop)
 
 ; multiply loop: an outer loop for each non-zero qword of multiplicand, with an inner loop for each non-zero qword of multiplier, results accumulated in 'product'
@@ -141,13 +94,13 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				MOV				R10, R11							; R10 holds index for overflow / product work area (results)
 				ADD				R10, R12
 				INC				R10									; index for product/overflow 
-				MOV				RAX, [ R8 ] + [ R12 * 8 ]			; get qword of multiplicand
-				MUL				Q_PTR [ R9 ] + [ R11 * 8 ]			; multiply by qword of multiplier
+				MOV				RAX, Q_PTR [ R8 ] [ R12 * 8 ]		; get qword of multiplicand
+				MUL				Q_PTR [ R9 ] [ R11 * 8 ]			; multiply by qword of multiplier
 				ADD				product [ R10 * 8 ], RAX			; accummulate in product, this is low-order 64 bits of result of mul
 				DEC				R10									; preserves carry flag
 @@:
 				ADC				product [ R10 * 8 ], RDX			; high-order result of 64bit multiply, plus the carry (if any)
-				MOV				RDX, 0								; again, preserves carry flag
+				LEA				RDX, [ 0 ]							; again, preserves carry flag
 				JNC				@F									; if adding caused carry, propagate it, else next 
 				DEC				R10									; propagating carry
 				JGE				@B
@@ -155,7 +108,7 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				DEC				R12
 				CMP				R12W, candl							; Done with inner loop?
 				JGE				@@multloop							; no, do it again
-				MOV				R12, 7								; yes, reset inner loop (multiplicand) index
+				LEA				R12, [ 7 ]							; yes, reset inner loop (multiplicand) index
 				DEC				R11									; decrement index for outer loop
 				CMP				R11W, plierl						; done with outer loop?
 				JGE				@@multloop							; no, do it again with next qword of multiplier
@@ -190,7 +143,7 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				MOV				RCX, savedRDX						; address of passed overflow
 				Zero512			RCX 								; zero it
 				MOV				RCX, savedRCX						; copy (whichever: multiplier or multiplicand) to callers product
-				Copy512			RCX, RDX							; RDX "passed" here from whomever jumped here (either multiplier, or multiplicand in RDX)
+				Copy512			RCX, RDX							; RDX "passed" here from whomever jumped here (either &multiplier, or &multiplicand in RDX)
 				JMP				@@exit								; and exit
 mult_u			ENDP
 
@@ -208,20 +161,21 @@ mult_u			ENDP
 				OPTION			PROLOGUE:none
 				OPTION			EPILOGUE:none
 mult_uT64		PROC			PUBLIC
-				
+
+; Check passed parameters alignment				
 				CheckAlign		RCX									; (out) Product
 				CheckAlign		R8									; (in) Multiplicand
 
 ; caller might be doing multiply 'in-place', so need to save the original multiplicand, prior to clearing callers product (A = A * x), or (A *= x)
 				FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
-				PUSH			Q_PTR [ R8 ] + [ idx * 8 ]
+				PUSH			Q_PTR [ R8 ] [ idx * 8 ]
 				ENDM
 
 ; clear callers product and overflow
 ;	Note: if caller used multiplicand and product as the same variable (memory space),
 ;	this would wipe the multiplicand. Hence the saving of the multiplicand on the stack. (above)
 				XOR				RAX, RAX
-				Zero512			RCX, "Q"   							; clear callers product (multiply uses an additive carry, so it needs to start zeroed)
+				Zero512Q		RCX		   							; clear callers product (multiply uses an addition with carry, so it needs to start zeroed)
 				MOV				Q_PTR [ RDX ], RAX					; clear callers overflow
  				MOV				R10, RDX							; RDX (pointer to callers overflow) gets used in the MUL: save it in R10
 
@@ -229,15 +183,15 @@ mult_uT64		PROC			PUBLIC
 				FOR				idx, < 7, 6, 5, 4, 3, 2, 1 >		; Note: this is not a 'real' for, this is a macro that generates an unwound loop
 				POP				RAX									; multiplicand [ idx ] qword -> RAX
 				MUL				R9									; times multiplier -> RAX, RDX
-				ADD				Q_PTR [ RCX ] + [ idx * 8 ], RAX	; add RAX to working product [ idx ] qword
-				ADC				Q_PTR [ RCX ] + [ (idx - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+				ADD				Q_PTR [ RCX ] [ idx * 8 ], RAX		; add RAX to working product [ idx ] qword
+				ADC				Q_PTR [ RCX ] [ (idx - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
 				ENDM
 
 ; Most significant (idx=0), the high order result of the multiply in RDX, goes to the overflow of the caller
 				POP				RAX
 				MUL				R9
-				ADD				Q_PTR [ RCX ] + [ 0 * 8 ], RAX
-				ADC				Q_PTR [ R10 ], RDX						; last qword overflow is also the operation overflow
+				ADD				Q_PTR [ RCX ] [ 0 * 8 ], RAX
+				ADC				Q_PTR [ R10 ], RDX					; last qword overflow is also the operation overflow
 				XOR				RAX, RAX							; return zero
 				RET
 mult_uT64		ENDP
@@ -300,12 +254,12 @@ div_oset		EQU				padding2 + 64 - padding1
 				MOV				RDX, savedRDX						; RDX - addr of remainder
 				MOV				R8, savedR8							; R8 - addr of dividend
 				MOV				RAX, savedR9
-				MOV				R9, Q_PTR [ RAX ] + [ 7 * 8 ]		; R9 - value of 64 bit divisor
+				MOV				R9, Q_PTR [ RAX ] [ 7 * 8 ]			; R9 - value of 64 bit divisor
 				CALL			div_uT64
 				MOV				RDX, savedRDX						; move 64 bit remainder to last word of 8 word remainder
 				MOV				RCX, Q_PTR [ RDX ]					; get the one qword remainder
 				Zero512			RDX									; clear the 8 qword callers remainder
-				MOV				Q_PTR [ RDX ] + [ 7 * 8 ], RCX		; put the one qword remainder in the least significant qword of the callers remainder
+				MOV				Q_PTR [ RDX ] [ 7 * 8 ], RCX		; put the one qword remainder in the least significant qword of the callers remainder
 				JMP				cleanupret
 
 ;
@@ -362,13 +316,13 @@ mbynDiv:
 				XOR				RAX, RAX
 				MOV				RCX, -1
 @@:
-				TEST			Q_PTR [ R12 ] + [ RAX * 8 ], RCX	; R12 currently has addr of begining of enumerator, 
+				TEST			Q_PTR [ R12 ] [ RAX * 8 ], RCX		; R12 currently has addr of begining of enumerator, 
 				JNZ				@F
 				INC				RAX
 				CMP				RAX, 8
 				JLE				@B
 @@:
-				LEA				R12, Q_PTR [ R12 ] + [ RAX * 8 ]	; revise begining address of working numerator with address of first non-zero qword
+				LEA				R12, Q_PTR [ R12 ] [ RAX * 8 ]		; revise begining address of working numerator with address of first non-zero qword
 				LEA				RCX, [ 9 ]
 				SUB				CX, AX
 				MOV				mDim, CX
@@ -384,9 +338,9 @@ mbynDiv:
 ;			Step D3: Calculate  q^
 D3:
 				MOVZX			RCX, jIdx
-				MOV				RDX, Q_PTR [ R12 ] + [ RCX * 8 ]
+				MOV				RDX, Q_PTR [ R12 ] [ RCX * 8 ]
 				INC				RCX
-				MOV				RAX, Q_PTR [ R12 ] + [ RCX * 8 ]
+				MOV				RAX, Q_PTR [ R12 ] [ RCX * 8 ]
 				DIV				nDiv
 				MOV				qHat, RAX
 				MOV				rHat, RDX
@@ -405,6 +359,23 @@ D4:
 		; expaining the intricacies: the leading digit of the multiplied number needs to line up with the leading digit of the enumerator @ [ R12 ]
 		; the multiply may have added a digit (a qword). The added digit may be in the answer, or may be in the overflow
 		; subtract the result of the multiply from the remaining (current) numerator
+		;
+		;
+		; notes
+		;
+		; leasst significsat (last) qwords of qdiv get subtracted from qwords of currnumerator offset by jIdx
+		; nr words of qdiv is variable. nr words of currnumerator is variable, 
+		; jIdx offset may cause truncated subtract
+		;
+		; so: need len (nr words) of qdiv (qlen); need jidx, need lesser of (8 - jidx) and len of qdiv (sublen), need diff between len of qdiv and sublen (truncoffset)
+		;
+		;	qidx = 7
+		;	cidx = jidx + sublen
+		; loop:>
+		;	sub with borrow qdiv [ qidx - truncoffset ] from currnumerator [ cidx ]
+		;	dec qidx, cidx
+		;	dec sublen
+		;	jnz loop
 
 ;			Step D5: Test remainder
 D5:
@@ -420,14 +391,14 @@ D6:
 				MOV				R10, addbackR11
 				CLC													; Carry indicator
 @@:
-				MOV				RAX, Q_PTR [ R11 ] + [ RDX * 8 ]
-				LEA				RCX, Q_PTR [ R12 ] + [ 1 * 8 ]
-				ADC				Q_PTR [ RCX ] + [ RDX * 8 ], RAX
+				MOV				RAX, Q_PTR [ R11 ] [ RDX * 8 ]
+				LEA				RCX, Q_PTR [ R12 ] [ 1 * 8 ]
+				ADC				Q_PTR [ RCX ] [ RDX * 8 ], RAX
 				DEC				RDX
 				DEC				R10
 				JNS				@B
 				MOV				RAX, qdiv [ 7 * 8 ]
-				ADC				Q_PTR [ R12 ] + [ RDX * 8 ], RAX
+				ADC				Q_PTR [ R12 ] [ RDX * 8 ], RAX
 
 ;			Step D7: Loop on j
 D7:
@@ -438,7 +409,7 @@ D7:
 ;			Step D8: Un Normalize:
 D8UnNormalize:
 				MOV				RCX, savedRDX						; reduced working numerator is now the remainder
-				LEA				RDX, currnumerator + [ 8 * 8 ]		; shifted result to callers remainder
+				LEA				RDX, currnumerator [ 8 * 8 ]		; shifted result to callers remainder
 				MOV				R8W, normf
 				CALL			shr_u
 				;
@@ -458,13 +429,32 @@ cleanupwretcode:
 				ReleaseFrame	savedRBP
 				RET
 divbyzero:
-				MOV				EAX, ret_1
+				MOV				EAX, ret_minus_1
 				JMP				cleanupwretcode
 
 numtoremain:	MOV				R8, savedR8
 				MOV				RDX, savedRDX
 				Copy512			RDX, R8
 				JMP				cleanupret
+; subroutine (called) to subtract n digits at [RCX] from [RDX] count of digits in R8
+@sub:			CLC
+@@:				TEST			R8,  R8
+				JZ				@e1
+				MOV				RAX, Q_PTR [ RCX ] [ R8 * 8 ]
+				SBB				Q_PTR [ RDX ] [ R8 * 8 ], RAX
+				DEC				R8
+				JMP				@B
+@e1:			RET
+
+; subroutine (called) to add (back) n digits at [RCX] to [RDX] count of digits in R8
+@addback:		CLC
+@@:				TEST			R8, R8
+				JZ				@e2
+				MOV				RAX, Q_PTR [ RCX ] [ R8 * 8 ]
+				ADC				Q_PTR [ RDX ] [ R8 * 8 ], RAX
+				DEC				R8
+				JMP				@B
+@e2:			RET
 
 div_u			ENDP
 
@@ -498,9 +488,9 @@ div_uT64		PROC			PUBLIC
 
 ; FOR EACH index of 0 thru 7: get qword of dividend, divide by divisor, store qword of quotient
 				FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
-				MOV				RAX, Q_PTR [ R8 ] + [ idx * 8 ]	; dividend [ idx ] -> RAX
+				MOV				RAX, Q_PTR [ R8 ] [ idx * 8 ]		; dividend [ idx ] -> RAX
 				DIV				R9									; divide by divisor in R9 (as passed)
-				MOV				Q_PTR [ RCX ] + [ idx * 8 ], RAX	; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+				MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
 				ENDM
 
 ; Last (least significant qword) divide leaves a remainder, store it at callers remainder
@@ -518,26 +508,4 @@ div_uT64		PROC			PUBLIC
 				JMP				@@exit
 div_uT64		ENDP
 
-
-;
-;--------------------------------------------------------------------------------------------------------------------------------------------------------------
-;			EXTERNDEF		reg_verify:PROC	;	void reg_verify ( u64* reg struct)
-;			div_uT64		-	divide 512 bit dividend by 64 bit divisor, giving 512 bit quotient and 64 bit remainder
-				OPTION			PROLOGUE:none
-				OPTION			EPILOGUE:none
-reg_verify		PROC			PUBLIC
-
-				MOV				Q_PTR [ RCX ] + [ 0 * 8 ], R12
-				MOV				Q_PTR [ RCX ] + [ 1 * 8 ], R13
-				MOV				Q_PTR [ RCX ] + [ 2 * 8 ], R14
-				MOV				Q_PTR [ RCX ] + [ 3 * 8 ], R15
-				MOV				Q_PTR [ RCX ] + [ 4 * 8 ], RDI
-				MOV				Q_PTR [ RCX ] + [ 5 * 8 ], RSI
-				MOV				Q_PTR [ RCX ] + [ 6 * 8 ], RBX
-				MOV				Q_PTR [ RCX ] + [ 7 * 8 ], RBP
-				MOV				Q_PTR [ RCX ] + [ 8 * 8 ], RSP
-
-				RET
-
-reg_verify		ENDP
 				END
