@@ -1,6 +1,3 @@
-IFNDEF		legalnotes
-legalnotes	EQU		1
-.LIST
 ;
 ;			ui512aMacros
 ;
@@ -9,62 +6,11 @@ legalnotes	EQU		1
 ;			Legal:			Copyright @2024, per MIT License below
 ;			Date:			May 13, 2024
 ;
-;			Notes:
-;				ui512 is a small project to provide basic operations for a variable type of unsigned 512 bit integer.
-;
-;				ui512a provides basic operations: zero, copy, compare, add, subtract.
-;				ui512b provides basic bit-oriented operations: shift left, shift right, and, or, not, least significant bit and most significant bit.
-;               ui512md provides multiply and divide.
-;
-;				It is written in assembly language, using the MASM (ml64) assembler provided as an option within Visual Studio.
-;				(currently using VS Community 2022 17.14.10)
-;
-;				It provides external signatures that allow linkage to C and C++ programs,
-;				where a shell/wrapper could encapsulate the methods as part of an object.
-;
-;				It has assembly time options directing the use of Intel processor extensions: AVX4, AVX2, SIMD, or none:
-;				(Z (512), Y (256), or X (128) registers, or regular Q (64bit)).
-;
-;				Note: The file "compile_time_options.inc" contains the options that can be configured for extension usage, and other options.
-;
-;				If processor extensions are used, the caller must align the variables declared and passed
-;				on the appropriate byte boundary (e.g. alignas 64 for 512)
-;
-;				This module is very light-weight (less than 2K bytes) and relatively fast,
-;				but is not intended for all processor types or all environments. 
-;
-;				Use for private (hobbyist), or instructional, or as an example for more ambitious projects is all it is meant to be.
-;
-;--------------------------------------------------------------------------------------------------------------------------------------------------------------
-;
-;			MIT License
-;
-;			Copyright (c) 2024 John G. Lynch
-;
-;				Permission is hereby granted, free of charge, to any person obtaining a copy
-;				of this software and associated documentation files (the "Software"), to deal
-;				in the Software without restriction, including without limitation the rights
-;				to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-;				copies of the Software, and to permit persons to whom the Software is
-;				furnished to do so, subject to the following conditions:
-;
-;				The above copyright notice and this permission notice shall be included in all
-;				copies or substantial portions of the Software.
-;
-;				THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-;				IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-;				FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-;				AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-;				LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-;				OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-;				SOFTWARE.
-;
-
-ENDIF			; legalnotes
 
 IFNDEF			ui512aMacros_INC
 ui512aMacros_INC EQU			<1>
 
+				INCLUDE			legalnotes.inc
 
 ;           header file equivalent extern declarations
 ;			EXTERN "C" signatures (from ui512a.asm)
@@ -134,36 +80,30 @@ CPGE			EQU				5
 CPGT			EQU				6
 CPTRUE			EQU				7
 
-;			Mask values (for k reg) used to select particulare QWORDS from X, Y, or Z simd regs
-MaskBit0		EQU				B_PTR [ 00000001b ]
-MaskBit1		EQU				B_PTR [ 00000010b ]
-MaskBit2		EQU				B_PTR [ 00000100b ]
-MaskBit3		EQU				B_PTR [ 00001000b ]
-MaskBit4		EQU				B_PTR [ 00010000b ]
-MaskBit5		EQU				B_PTR [ 00100000b ]
-MaskBit6		EQU				B_PTR [ 01000000b ]
-MaskBit7		EQU				B_PTR [ 10000000b ]
-
-;			Another way to get masks
-kMask			RECORD			b8:1, b7:1, b6:1, b5:1, b4:1, b3:1, b2:1, b1:1, b0:1
-
 ;
 ; MemConstants <none>
 ;
 ;		Define useful constants
+;		Note: this must be first in a data segment aligned (64)
 ;
 MemConstants	MACRO
-
+; 
 qOnes			QWORD           8 DUP (0ffffffffffffffffh)
-;
 zeroQ			DQ				0
-mskHex100		DD				0100h
-;		Return codes commonly used.			
-ret0			DD				0								
-ret1			DD				1
-ret_minus_1		DD				-1
+
+;		Return codes commonly used.	
+retcode_zero	EQU				0
+retcode_one		EQU				1
+retcode_neg_one	EQU				-1
+;		Sometimes need to get it from memory, not an immediate value. So:
+ret_zero		DD				retcode_zero						
+ret_one			DD				retcode_one
+ret_neg_one		DD				retcode_neg_one
+
 ;		Masks commonly used
-mskAll8			DB				255
+;		Record form, which can be used as immediate values. Example: OR	R8D, MASK kMask.b8
+kMask			RECORD			b8:1, b7:1, b6:1, b5:1, b4:1, b3:1, b2:1, b1:1, b0:1
+;		And as memory, for when immediate simply wont do
 mskB0			DB				1
 mskB1			DB				2
 mskB2			DB				4
@@ -172,7 +112,7 @@ mskB4			DB				16
 mskB5			DB				32
 mskB6			DB				64
 mskB7			DB				128
-
+mskAll8			DB				255
 				ENDM
 
 ;==================================================================================================
@@ -202,7 +142,7 @@ mskB7			DB				128
 ;	Only a few macros are included, and are reformatted to match coding style:
 ;	indents and capitalization.
 ;
-; LEAF_ENTRY <Name>, <Section>, <NoPad>
+; LEAF_ENTRY <Name>, <Section>
 ;
 ; Macro Description:
 ;
@@ -223,11 +163,6 @@ mskB7			DB				128
 ;
 ;   Section - Supplies the name of the section within which the function
 ;             is to appear
-;
-;   NoPad - If present, indicates that the function should not be prefixed
-;           with 6 bytes of padding.  This is for internal use only - the
-;           calling standard dictates that functions (nested and leaf) must
-;           be prefixed with padding.
 ;
 Leaf_Entry		MACRO			Name, Section
 Section			SEGMENT			PARA 'CODE'
@@ -399,4 +334,4 @@ Copy512Q		MACRO			dest:REQ, src:REQ
 
 				ENDM
 
-ENDIF	; IFNDEF			ui512aMacros_INC
+ENDIF	; ui512aMacros_INC

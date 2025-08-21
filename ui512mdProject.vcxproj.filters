@@ -28,10 +28,10 @@
     <None Include="ui512mdMacros.inc">
       <Filter>Header Files</Filter>
     </None>
-    <None Include="..\ui512aProject\compile_time_options.inc">
+    <None Include="legalnotes.inc">
       <Filter>Header Files</Filter>
     </None>
-    <None Include="legalnotes.inc">
+    <None Include="compile_time_options.inc">
       <Filter>Header Files</Filter>
     </None>
   </ItemGroup>

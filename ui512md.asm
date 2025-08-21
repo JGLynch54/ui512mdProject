@@ -49,6 +49,7 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				MOV				savedR10, R10
 				MOV				savedR11, R11
 				MOV				savedR12, R12
+
 ; Check passed parameters alignment
 				CheckAlign		RCX									; (out) Product
 				CheckAlign		RDX									; (out) Overflow
@@ -429,7 +430,7 @@ cleanupwretcode:
 				ReleaseFrame	savedRBP
 				RET
 divbyzero:
-				MOV				EAX, ret_minus_1
+				LEA				EAX, [ retcode_neg_one ]
 				JMP				cleanupwretcode
 
 numtoremain:	MOV				R8, savedR8
@@ -504,7 +505,7 @@ div_uT64		PROC			PUBLIC
 				Zero512			RCX									; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
 				XOR				RAX, RAX
 				MOV				Q_PTR [ R10 ] , RAX
-				DEC				EAX									; return error (div by zero)
+				LEA				EAX, [ retcode_neg_one ]								; return error (div by zero)
 				JMP				@@exit
 div_uT64		ENDP
 
