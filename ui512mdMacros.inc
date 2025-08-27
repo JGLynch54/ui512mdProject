@@ -35,9 +35,54 @@ EXTERNDEF		div_u:PROC		;	s16 div_u( u64* quotient, u64* remainder, u64* dividend
 
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-CreateFrame		MACRO			argsize, argsavename
+;==================================================================================================
+; Selected macros from "macamd64.inc" (c) Microsoft Corporation
+;	These macros generate .xdata and .pdata entries in the executable image file.
+;	The entries assist in exception and debugging; helping 'unwind' operations.
+;	Only a few macros are included, and are reformatted to match coding style:
+;	indents and capitalization.
 ;
+; OTHER_ENTRY <Name>, <Section>
+;
+; Macro Description:
+;
+;   This macro indicates the beginning of a function.
+;
+; Arguments:
+;
+;   Name - Supplies the name of the function
+;
+;   Section - Supplies the name of the section within which the function
+;             is to appear
+;
+Other_Entry		MACRO			Name, Section
+Section			SEGMENT			PARA 'CODE'
+				DB				6 DUP (0cch)
+				ALIGN			16
+				ENDM
+
+; OTHER_END <Name>, <Section>
+;
+; Macro Description:
+;
+;   This macro indicates the end of a function.  It must be paired
+;   with a OTHER_ENTRY macro that includes matching Name and Section
+;   parameters.
+;
+; Arguments:
+;
+;   Name - Supplies the name of the function.  Must match that supplied to
+;          the corresponding OTHER_ENTRY macro.
+;
+;   Section - Supplies the name of the section within which the function
+;             is to appear.  Must match that supplied to the corresponding
+;             OTHER_ENTRY macro.
+;
+Other_Exit		MACRO			Name, Section
+Section			ENDS
+				ENDM
+
+;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;			set up frame to save regs, and to create aligned working memory for scratch variables
 ;			argsize is the amount of space to be made on the stack for locals and padding (at least 40h on each end)
 ;			argsavename is the name of the variable, within the LOCAL declarations, QWORD, for the RBP to be saved, and restored from
@@ -59,6 +104,7 @@ CreateFrame		MACRO			argsize, argsavename
 ;
 ;			Use only one return from the PROC, and immediately before return, use ReleaseFrame macro, giving name of where RBP is saved
 ;
+CreateFrame		MACRO			argsize, argsavename
 				PUSH			RBP
 				MOV				RBP, RSP
 				AND				RSP, -8
@@ -69,14 +115,12 @@ CreateFrame		MACRO			argsize, argsavename
 				MOV				argsavename, RAX					; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
 				ENDM
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
-
-
-ReleaseFrame	MACRO			argsavename
 ;			release memory set up by createframe macro
 ;			restores RSP, and RBP to as-called values
 ;			after these instructions are executed, LOCAL variables can NOT be accessed
 ;			This needs to be done to restore the stack correctly, but can be done only once
 ;			Strongly suggest doing this just prior to return instruction, and that there is only one return instruction from the PROC
+				ReleaseFrame	MACRO			argsavename
 				MOV				RSP, argsavename					; restore unadjusted / unrounded (the as when called) stack pointer (eliminating LOCAL storage) 
 				POP				RBP									; restore base pointer for caller
 				ENDM

@@ -14,18 +14,17 @@
 
 #include "pch.h"
 #include "CppUnitTest.h"
-
-#include <format>
-
 #include "ui512a.h"
 #include "ui512b.h"
 #include "ui512md.h"
+#include "CommonTypeDefs.h"
+
+#include <cstring>
+#include <sstream>
+#include <format>
 
 using namespace std;
 using namespace Microsoft::VisualStudio::CppUnitTestFramework;
-
-// Macro helper to construct and pass message from with Assert
-#define MSG(msg) [&]{ std::wstringstream _s; _s << msg; return _s.str(); }().c_str()
 
 namespace ui512mdTests
 {
@@ -53,6 +52,18 @@ namespace ui512mdTests
 			// suggested seed: around 2^32, 4294967291
 			*seed = (*seed == 0ull) ? (a * 4294967291ull + c) % m : (a * *seed + c) % m;
 			return *seed;
+		};
+
+		/// <summary>
+		/// Random fill of ui512 variable
+		/// </summary>
+		/// 
+		void RandomFill(u64* var, u64* seed)
+		{
+			for (int i = 0; i < 8; i++)
+			{
+				var[i] = RandomU64(seed);
+			};
 		};
 
 		TEST_METHOD(random_number_generator)
@@ -117,27 +128,111 @@ namespace ui512mdTests
 			// Note: the ui512a module must pass testing before these tests, as zero, add, and set are used in this test
 			// Note: the ui512b module must pass testing before these tests, as 'or' and shifts are used in this test
 
-			u64 seed = 0;
-			alignas (64) u64 num1[8]{ 0 };
-			alignas (64) u64 num2[8]{ 0 };
-			alignas (64) u64 num3[8]{ 0 };
-			alignas (64) u64 product[8]{ 0 };
-			alignas (64) u64 overflow[8]{ 0 };
-			alignas (64) u64 intermediateprod[8]{ 0 };
-			alignas (64) u64 intermediateovrf[8]{ 0 };
-			alignas (64) u64 expectedproduct[8]{ 0 };
-			alignas (64) u64 expectedoverflow[8]{ 0 };
-			alignas (64) u64 work[8]{ 0 };
+			u64 seed = 0;			// seed of zero will initialize to a known value
+
+			_UI512(num1) { 0 };
+			_UI512(num2) { 0 };
+			_UI512(num3) { 0 };
+			_UI512(product) { 0 };
+			_UI512(overflow) { 0 };
+			_UI512(intermediateprod) { 0 };
+			_UI512(intermediateovrf) { 0 };
+			_UI512(expectedproduct) { 0 };
+			_UI512(expectedoverflow) { 0 };
+			_UI512(work) { 0 };
+
+			// Edge case tests
+			// 1. zero times zero
+			zero_u(num1);
+			zero_u(num2);
+			zero_u(expectedproduct);
+			zero_u(expectedoverflow);
+			mult_u(product, overflow, num1, num2);
+			for (int j = 0; j < 8; j++)
+			{
+				Assert::AreEqual(expectedproduct[j], product[j],
+					_MSGW(L"Product at " << j << " failed zero times zero"));
+				Assert::AreEqual(expectedoverflow[j], overflow[j],
+					_MSGW(L"Overflow at " << j << " failed zero times zero"));
+			};
+			// 2. zero times random
+			for (int i = 0; i < runcount; i++)
+			{
+				zero_u(num1);
+				RandomFill(num2, &seed);
+				zero_u(expectedproduct);
+				zero_u(expectedoverflow);
+				mult_u(product, overflow, num1, num2);
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed zero times random " << i));
+					Assert::AreEqual(expectedoverflow[j], overflow[j],
+						_MSGW(L"Overflow at " << j << " failed zero times random " << i));
+				};
+			};
+			// 3. random times zero
+			for (int i = 0; i < runcount; i++)
+			{
+				zero_u(num2);
+				RandomFill(num1, &seed);
+				zero_u(expectedproduct);
+				zero_u(expectedoverflow);
+				mult_u(product, overflow, num1, num2);
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed random times zero " << i));
+					Assert::AreEqual(expectedoverflow[j], overflow[j],
+						_MSGW(L"Overflow at " << j << " failed random times zero " << i));
+				};
+			};
+			// 4. one times random
+			for (int i = 0; i < runcount; i++)
+			{
+				set_uT64(num1, 1ull);
+				RandomFill(num2, &seed);
+				copy_u(expectedproduct, num2);
+				zero_u(expectedoverflow);
+				mult_u(product, overflow, num1, num2);
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed one times random " << i));
+					Assert::AreEqual(expectedoverflow[j], overflow[j],
+						_MSGW(L"Overflow at " << j << " failed one times random " << i));
+				};
+			};
+			// 5. random times one
+			for (int i = 0; i < runcount; i++)
+			{
+				set_uT64(num2, 1ull);
+				RandomFill(num1, &seed);
+				copy_u(expectedproduct, num1);
+				zero_u(expectedoverflow);
+				mult_u(product, overflow, num1, num2);
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed random times one " << i));
+					Assert::AreEqual(expectedoverflow[j], overflow[j],
+						_MSGW(L"Overflow at " << j << " failed random times one " << i));
+				};
+			};
+			{
+				string test_message = _MSGA("Multiply function testing. Edge cases: zero times zero, zero times random, random times zero, one times random, random times one. \n "
+					<< runcount << " times each, with pseudo random values.\n";);
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			};
+			// Now the real tests, progressively more complex
 
 			// First test, a simple multiply by two. 
 			// Easy to check as the expected answer is a shift left, expected overflow is a shift right
 			for (int i = 0; i < runcount; i++)
 			{
 				//	random initialize multiplicand
-				for (int j = 0; j < 8; j++)
-				{
-					num1[j] = RandomU64(&seed);
-				};
+				RandomFill(num1, &seed);
 
 				//	initialize multiplier
 				set_uT64(num2, 2ull);
@@ -155,34 +250,27 @@ namespace ui512mdTests
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedproduct[j], product[j],
-						MSG(L"Product at " << j << " failed " << i));
+						_MSGW(L"Product at " << j << " failed " << i));
 					Assert::AreEqual(expectedoverflow[j], overflow[j],
-						MSG(L"Overflow at " << j << " failed " << i));
+						_MSGW(L"Overflow at " << j << " failed " << i));
 				}
 			};
-
-			string runmsg1 = "Multiply function testing. First test, a simple multiply by two.  "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg1.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
+			{
+				string test_message = _MSGA("Multiply function testing.First test, a simple multiply by two.  "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			};
 			// Second test, a simple multiply by a random power of two. 
 			// Still relatively easy to check as the expected answer is a shift left,
 			// expected overflow is a shift right
 			for (int i = 0; i < runcount; i++)
 			{
-				for (int j = 0; j < 8; j++)
-				{
-					num1[j] = RandomU64(&seed);
-				};
-
+				RandomFill(num1, &seed);
 				set_uT64(num2, 1ull);
-
 				u16 nrShift = RandomU64(&seed) % 512;
 				shl_u(num2, num2, nrShift);
-
 				shl_u(expectedproduct, num1, nrShift);
-
 				shr_u(expectedoverflow, num1, (512 - nrShift));
 
 				mult_u(product, overflow, num1, num2);
@@ -190,31 +278,27 @@ namespace ui512mdTests
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedproduct[j], product[j],
-						MSG(L"Product at " << j << " failed " << i));
+						_MSGW(L"Product at " << j << " failed " << i));
 					Assert::AreEqual(expectedoverflow[j], overflow[j],
-						MSG(L"Overflow at " << j << " failed " << i));
+						_MSGW(L"Overflow at " << j << " failed " << i));
 				}
 			};
-
-			string runmsg2 = "Multiply function testing. Second test, a simple multiply by a random power of two. "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg2.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			{
+				string test_message = _MSGA("Multiply function testing. Second test, a simple multiply by a random power of two. "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			};
 
 			// Third test, a simple multiply by a random 64 bit integer. 
 			// Still relatively easy to check as the expected answer is a shift left,
 			// expected overflow is a shift right
 			for (int i = 0; i < runcount; i++)
 			{
-				for (int j = 0; j < 8; j++)
-				{
-					num1[j] = RandomU64(&seed);
-				};
-
+				RandomFill(num1, &seed);
 				u64 num2_64 = RandomU64(&seed);
 				u64 expectedovfl_64 = 0;
 				set_uT64(num2, num2_64);
-
 				mult_uT64(expectedproduct, &expectedovfl_64, num1, num2_64);
 				set_uT64(expectedoverflow, expectedovfl_64);
 
@@ -223,17 +307,18 @@ namespace ui512mdTests
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedproduct[j], product[j],
-						MSG(L"Product at " << j << " failed " << i));
+						_MSGW(L"Product at " << j << " failed " << i));
 					Assert::AreEqual(expectedoverflow[j], overflow[j],
-						MSG(L"Overflow at " << j << " failed " << i));
+						_MSGW(L"Overflow at " << j << " failed " << i));
 				}
 			};
 
-			string runmsg3 = "Multiply function testing. Third test, a multiply by a random 64 bit value. "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg3.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
+			{
+				string test_message = _MSGA("Multiply function testing. Third test, a multiply by a random 64 bit value. "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			};
 
 			// Fourth test, a multiply by sums of random powers of two into a 64 bit value. 
 			// Building "expected" is a bit more complicated. This test is more about correctly buiding "expected"
@@ -248,10 +333,8 @@ namespace ui512mdTests
 					rbits[j] = (RandomU64(&seed) % 2) == 1;
 				};
 
-				for (int j = 7; j >= 0; j--)
-				{
-					num1[j] = RandomU64(&seed);
-				};
+				// random initialize multiplicand
+				RandomFill(num1, &seed);
 
 				// build multiplier as 'N' number of random bits (avoid duplicate bits)
 				// simultaneously build expected result and overflow
@@ -322,7 +405,7 @@ namespace ui512mdTests
 						Logger::WriteMessage(ToString(j).c_str());
 					};
 					Assert::AreEqual(expectedproduct[j], prod64[j],
-						MSG(L"64 bit Product at " << j << " failed " << i));
+						_MSGW(L"64 bit Product at " << j << " failed " << i));
 
 
 					if (expectedoverflow[j] != ovfl64[j]) {
@@ -330,7 +413,7 @@ namespace ui512mdTests
 					};
 
 					Assert::AreEqual(expectedoverflow[j], ovfl64[j],
-						MSG(L"64 bit Overflow at " << j << " failed " << i));
+						_MSGW(L"64 bit Overflow at " << j << " failed " << i));
 				}
 
 
@@ -344,7 +427,7 @@ namespace ui512mdTests
 						Logger::WriteMessage(ToString(j).c_str());
 					};
 					Assert::AreEqual(expectedproduct[j], product[j],
-						MSG(L"Product at " << j << " failed " << i));
+						_MSGW(L"Product at " << j << " failed " << i));
 
 
 					if (expectedoverflow[j] != overflow[j]) {
@@ -352,15 +435,16 @@ namespace ui512mdTests
 					};
 
 					Assert::AreEqual(expectedoverflow[j], overflow[j],
-						MSG(L"Overflow at " << j << " failed " << i));
+						_MSGW(L"Overflow at " << j << " failed " << i));
 				}
 			};
 
-			string runmsg4 = "Multiply function testing. Fourth test. Multiply by sums of random powers of two, building ""expected"" 64 bit only; "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg4.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
+			{
+				string test_message = _MSGA("Multiply function testing. Fourth test. Multiply by sums of random powers of two, building ""expected"" 64 bit only; "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			}
 			// Fifth test, a multiply by sums of random powers of two into a 512 bit value. 
 			// Building "expected" is a bit more complicated. 
 
@@ -374,10 +458,7 @@ namespace ui512mdTests
 					rbits[j] = (RandomU64(&seed) % 2) == 1;
 				};
 
-				for (int j = 7; j >= 0; j--)
-				{
-					num1[j] = RandomU64(&seed);
-				};
+				RandomFill(num1, &seed);
 
 				// build multiplier as 'N' number of random bits (avoid duplicate bits)
 				// simultaneously build expected result and overflow
@@ -442,7 +523,7 @@ namespace ui512mdTests
 						Logger::WriteMessage(ToString(j).c_str());
 					};
 					Assert::AreEqual(expectedproduct[j], product[j],
-						MSG(L"Product at " << j << " failed " << i));
+						_MSGW(L"Product at " << j << " failed " << i));
 
 
 					if (expectedoverflow[j] != overflow[j]) {
@@ -450,14 +531,15 @@ namespace ui512mdTests
 					};
 
 					Assert::AreEqual(expectedoverflow[j], overflow[j],
-						MSG(L"Overflow at " << j << " failed " << i));
+						_MSGW(L"Overflow at " << j << " failed " << i));
 				}
 			};
-
-			string runmsg5 = "Multiply function testing. Fifth test. Multiply two psuedo-random 512-bit variables (use case).  "
-				+ to_string(runcount) + " times.\n";;
-			Logger::WriteMessage(runmsg5.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			{
+				string test_message = _MSGA("Multiply function testing. Fifth test. Multiply by sums of random powers of two, building ""expected"" full 512 bit; "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			};
 		};
 
 		TEST_METHOD(ui512md_01_mul_timing)
@@ -466,10 +548,10 @@ namespace ui512mdTests
 			// other than set-up, and messaging complete.
 
 			u64 seed = 0;
-			alignas (64) u64 num1[8]{ 0 };
-			alignas (64) u64 num2[8]{ 0 };
-			alignas (64) u64 product[8]{ 0 };
-			alignas (64) u64 overflow[8]{ 0 };
+			_UI512(num1) { 0 };
+			_UI512(num2) { 0 };
+			_UI512(product) { 0 };
+			_UI512(overflow) { 0 };
 
 			for (int i = 0; i < 8; i++)
 			{
@@ -481,10 +563,11 @@ namespace ui512mdTests
 			{
 				mult_u(product, overflow, num1, num2);
 			};
-
-			string runmsg = "Multiply function timing. Ran " +
-				to_string(timingcount) + " times.\n";
-			Logger::WriteMessage(runmsg.c_str());
+			{
+				string test_message = _MSGA("Multiply function timing test. Ran "
+					<< timingcount << " times with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+			};
 		};
 
 		TEST_METHOD(ui512md_01_mul_pnv)
@@ -492,12 +575,13 @@ namespace ui512mdTests
 			// Path and non-volatile reg tests
 
 			u64 seed = 0;
-			alignas (64) u64 num1[8]{ 0 };
-			alignas (64) u64 num2[8]{ 0 };
-			alignas (64) u64 product[8]{ 0 };
-			alignas (64) u64 overflow[8]{ 0 };
+			_UI512(num1) { 0 };
+			_UI512(num2) { 0 };
+			_UI512(product) { 0 };
+			_UI512(overflow) { 0 };
 			regs r_before{};
 			regs r_after{};
+
 			for (int i = 0; i < 8; i++)
 			{
 				num1[i] = RandomU64(&seed);
@@ -514,23 +598,25 @@ namespace ui512mdTests
 				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
 			};
 
-			string runmsg = "Multiply function:  path and non-volatile reg tests. Ran " +
-				to_string(runcount) + " times.\n";
-			Logger::WriteMessage(runmsg.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			{
+				string test_message = _MSGA("Multiply function:  path and non-volatile reg tests. Ran "
+					<< runcount << " times.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			}
 		};
 		TEST_METHOD(ui512md_02_mul64)
 		{
-			// mult_u tests
+			// mult_uT64 tests
 			// multistage testing, part for use as debugging, progressively "real" testing
 			// Note: the ui512a module must pass testing before these tests, as adds are used in this test
 			// Note: the ui512b module must pass testing before these tests, as 'or' and shifts are used in this test
 
 			u64 seed = 0;
-			alignas (64) u64 num1[8]{ 0 };
-			alignas (64) u64 product[8]{ 0 };
-			alignas (64) u64 intermediateprod[8]{ 0 };
-			alignas (64) u64 expectedproduct[8]{ 0 };
+			_UI512(num1) { 0 };
+			_UI512(product) { 0 };
+			_UI512(intermediateprod) { 0 };
+			_UI512(expectedproduct) { 0 };
 
 			u64 num2 = 0;
 			u64 num3 = 0;
@@ -538,6 +624,93 @@ namespace ui512mdTests
 			u64 intermediateovrf = 0;
 			u64 expectedoverflow = 0;
 
+
+			// Edge case tests
+			// 1. zero times zero
+			zero_u(num1);
+			num2 = 0;
+			zero_u(expectedproduct);
+			expectedoverflow = 0;
+			mult_uT64(product, &overflow, num1, num2);
+			Assert::AreEqual(expectedoverflow, overflow,
+				_MSGW(L"Overflow failed zero times zero"));
+			for (int j = 0; j < 8; j++)
+			{
+				Assert::AreEqual(expectedproduct[j], product[j],
+					_MSGW(L"Product at " << j << " failed zero times zero"));
+				;
+			};
+			// 2. zero times random
+			for (int i = 0; i < runcount; i++)
+			{
+				zero_u(num1);
+				num2 = RandomU64(&seed);
+				zero_u(expectedproduct);
+				expectedoverflow = 0;
+				mult_uT64(product, &overflow, num1, num2);
+				Assert::AreEqual(expectedoverflow, overflow,
+					_MSGW(L"Overflow  failed zero times random " << i));
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed zero times random " << i));
+				};
+			};
+			// 3. random times zero
+			for (int i = 0; i < runcount; i++)
+			{
+				num2 = 0;
+				RandomFill(num1, &seed);
+				zero_u(expectedproduct);
+				expectedoverflow = 0;
+				mult_uT64(product, &overflow, num1, num2);
+				Assert::AreEqual(expectedoverflow, overflow,
+					_MSGW(L"Overflow failed random times zero " << i));
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed random times zero " << i));
+				};
+			};
+			// 4. one times random
+			for (int i = 0; i < runcount; i++)
+			{
+				set_uT64(num1, 1ull);
+				num2 = RandomU64(&seed);
+				set_uT64(expectedproduct, num2);
+				expectedoverflow = 0;
+				mult_uT64(product, &overflow, num1, num2);
+				Assert::AreEqual(expectedoverflow, overflow,
+					_MSGW(L"Overflow failed one times random " << i));
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed one times random " << i));
+				};
+			};
+			// 5. random times one
+			for (int i = 0; i < runcount; i++)
+			{
+				num2 = 1ull;
+				RandomFill(num1, &seed);
+				copy_u(expectedproduct, num1);
+				expectedoverflow = 0;
+				mult_uT64(product, &overflow, num1, num2);
+				Assert::AreEqual(expectedoverflow, overflow,
+					_MSGW(L"Overflow failed random times one " << i));
+				for (int j = 0; j < 8; j++)
+				{
+					Assert::AreEqual(expectedproduct[j], product[j],
+						_MSGW(L"Product at " << j << " failed random times one " << i));
+				};
+			};
+			{
+				string test_message = _MSGA("Multiply function testing. Edge cases: zero times zero, zero times random, random times zero, one times random, random times one. \n "
+					<< runcount << " times each, with pseudo random values.\n";);
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			};
+			// Now the real tests, progressively more complex
 			// First test, a simple multiply by two. 
 			// Easy to check as the expected answer is a shift left,
 			// and expected overflow is a shift right
@@ -557,10 +730,10 @@ namespace ui512mdTests
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedproduct[j], product[j],
-						MSG(L"Product at " << j << " failed " << i));
+						_MSGW(L"Product at " << j << " failed " << i));
 				};
 
-				Assert::AreEqual(expectedoverflow, overflow, MSG(L"Overflow failed " << i));
+				Assert::AreEqual(expectedoverflow, overflow, _MSGW(L"Overflow failed " << i));
 			};
 
 			string runmsg1 = "Multiply (u64) function testing. Simple multiply by 2 " +
@@ -589,9 +762,9 @@ namespace ui512mdTests
 					for (int j = 0; j < 8; j++)
 					{
 						Assert::AreEqual(expectedproduct[j], product[j],
-							MSG(L"Product at " << j << " failed " << nrShift << i));
+							_MSGW(L"Product at " << j << " failed " << nrShift << i));
 					}
-					Assert::AreEqual(expectedoverflow, overflow, MSG(L"Overflow failed " << nrShift << " at " << i));
+					Assert::AreEqual(expectedoverflow, overflow, _MSGW(L"Overflow failed " << nrShift << " at " << i));
 				};
 			}
 
@@ -678,15 +851,16 @@ namespace ui512mdTests
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedproduct[j], product[j],
-						MSG(L"Product at " << j << " failed " << i << " num2: " << num2));
+						_MSGW(L"Product at " << j << " failed " << i << " num2: " << num2));
 				}
-				Assert::AreEqual(expectedoverflow, overflow, MSG(L"Overflow failed " << i));
+				Assert::AreEqual(expectedoverflow, overflow, _MSGW(L"Overflow failed " << i));
 			};
-
-			string runmsg3 = "Multiply (u64) function testing. Multiply by random number "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg3.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			{
+				string test_message = _MSGA("Multiply function testing. Third test. Multiply by sums of random powers of two, building ""expected""; "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
+			}
 		};
 
 		TEST_METHOD(ui512md_02_mul64_timing)
@@ -711,9 +885,11 @@ namespace ui512mdTests
 			{
 				mult_uT64(product, &overflow, num1, num2);
 			};
-
-			string runmsg = "Multiply (u64) function timing. Ran " + to_string(timingcount) + " times.\n";
-			Logger::WriteMessage(runmsg.c_str());
+			{
+				string test_message = _MSGA("Multiply (u64) function timing. Ran "
+					<< timingcount << " times with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+			};
 		};
 
 		TEST_METHOD(ui512md_02_mul64_pnv)
@@ -741,12 +917,15 @@ namespace ui512mdTests
 				reg_verify((u64*)&r_after);
 				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
 			};
-
-			string runmsg = "Multiply x64 function:  path and non-volatile reg tests. Ran " +
-				to_string(runcount) + " times.\n";
-			Logger::WriteMessage(runmsg.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			{
+				string test_message = _MSGA("Multiply (u64) function:  path and non-volatile reg tests. "
+					<< runcount << " times.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			}
 		};
+
+
 		//TEST_METHOD(ui512md_03_div)
 		//{
 		//	u64 seed = 0;
@@ -929,9 +1108,10 @@ namespace ui512mdTests
 		TEST_METHOD(ui512md_04_div64)
 		{
 			u64 seed = 0;
-			alignas (64) u64 dividend[8]{ 0 };
-			alignas (64) u64 quotient[8]{ 0 };
-			alignas (64) u64 expectedquotient[8]{ 0 };
+			_UI512(dividend) { 0 };
+			_UI512(quotient) { 0 };
+			_UI512(expectedquotient) { 0 };
+
 			u64 divisor = 0;
 			u64 remainder = 0;
 			u64 expectedremainder = 0;
@@ -943,12 +1123,8 @@ namespace ui512mdTests
 
 			for (int i = 0; i < runcount; i++)
 			{
-				for (int j = 0; j < 8; j++)
-				{
-					dividend[j] = RandomU64(&seed);
-				};
+				RandomFill(dividend, &seed);
 				zero_u(quotient);
-
 				divisor = 2;
 				shr_u(expectedquotient, dividend, u16(1));
 				expectedremainder = (dividend[7] << 63) >> 63;
@@ -958,17 +1134,17 @@ namespace ui512mdTests
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedquotient[j], quotient[j],
-						MSG(L"Quotient at " << j << " failed " << i));
+						_MSGW(L"Quotient at " << j << " failed " << i));
 				};
 
-				Assert::AreEqual(expectedremainder, remainder, MSG(L"Remainder failed " << i));
+				Assert::AreEqual(expectedremainder, remainder, _MSGW(L"Remainder failed " << i));
 			};
-
-			string runmsg1 = "Divide (u64) function testing. Simple divide by 2 " +
-				to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg1.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
+			{
+				string test_message = _MSGA("Divide (u64) function testing. Simple divide by 2 "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			};
 
 			// Second test, a simple divide by sequential powers of two. 
 			// Still relatively easy to check as expected answer is a shift right,
@@ -978,11 +1154,7 @@ namespace ui512mdTests
 			{
 				for (int i = 0; i < runcount / 64; i++)
 				{
-					for (int j = 0; j < 8; j++)
-					{
-						dividend[j] = RandomU64(&seed);
-					};
-
+					RandomFill(dividend, &seed);
 					divisor = 1ull << nrShift;
 					shr_u(expectedquotient, dividend, nrShift);
 					expectedremainder = (nrShift == 0) ? 0 : (dividend[7] << (64 - nrShift)) >> (64 - nrShift);
@@ -992,28 +1164,23 @@ namespace ui512mdTests
 					for (int j = 0; j < 8; j++)
 					{
 						Assert::AreEqual(expectedquotient[j], quotient[j],
-							MSG(L"Quotient at " << j << " failed " << nrShift << i));
+							_MSGW(L"Quotient at " << j << " failed " << nrShift << i));
 					}
-					Assert::AreEqual(expectedremainder, remainder, MSG(L"Remainder failed " << nrShift << " at " << i));
+					Assert::AreEqual(expectedremainder, remainder, _MSGW(L"Remainder failed " << nrShift << " at " << i));
 				};
 			}
-
-			string runmsg2 = "Divide function testing. Divide by sequential powers of 2 "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
-			Logger::WriteMessage(runmsg2.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-
+			{
+				string test_message = _MSGA("Divide function testing. Divide by sequential powers of 2 "
+					<< runcount << " times, each with pseudo random values.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			}
 
 			// Third test, Use case tests, divide out to get decimal digits. Do whole with random,
 			// and a knowable sample 
 			{
 				string digits = "";
-
-				for (int j = 0; j < 8; j++)
-				{
-					dividend[j] = RandomU64(&seed);
-				};
-
+				RandomFill(dividend, &seed);
 				int comp = compare_uT64(dividend, 0ull);
 				int cnt = 0;
 				while (comp != 0)
@@ -1037,7 +1204,6 @@ namespace ui512mdTests
 							};
 						};
 					}
-
 				}
 				Logger::WriteMessage(L"Use case: Divide to extract decimal digits:\n");
 				Logger::WriteMessage(digits.c_str());
@@ -1079,15 +1245,11 @@ namespace ui512mdTests
 			// other than set-up, and messaging complete.
 
 			u64 seed = 0;
-			alignas (64) u64 dividend[8]{ 0 };
-			alignas (64) u64 quotient[8]{ 0 };
+			_UI512(dividend) { 0 };
+			_UI512(quotient) { 0 };
 			u64 divisor = 0;
 			u64 remainder = 0;
-
-			for (int i = 0; i < 8; i++)
-			{
-				dividend[i] = RandomU64(&seed);
-			}
+			RandomFill(dividend, &seed);
 			zero_u(quotient);
 			divisor = RandomU64(&seed);
 
@@ -1095,10 +1257,11 @@ namespace ui512mdTests
 			{
 				div_uT64(quotient, &remainder, dividend, divisor);
 			};
-
-			string runmsg = "Divide by u64  function timing. Ran "
-				+ to_string(timingcount) + " times.\n";
-			Logger::WriteMessage(runmsg.c_str());
+			{
+				string test_message = _MSGA("Divide by u64  function timing. Ran "
+					<< timingcount << " times.\n");
+				Logger::WriteMessage(test_message.c_str());
+			};
 		};
 
 		TEST_METHOD(ui512md_04_div64_pnv)
@@ -1106,16 +1269,15 @@ namespace ui512mdTests
 			// Path and non-volatile reg tests
 
 			u64 seed = 0;
-			alignas (64) u64 num1[8]{ 0 };
-			alignas (64) u64 quotient[8]{ 0 };
+			_UI512(dividend) { 0 };
+			_UI512(quotient) { 0 };
+			_UI512(num1) { 0 };
+
 			u64 num2{ 0 };
 			u64 remainder{ 0 };
 			regs r_before{};
 			regs r_after{};
-			for (int i = 0; i < 8; i++)
-			{
-				num1[i] = RandomU64(&seed);
-			}
+			RandomFill(num1, &seed);
 			num2 = RandomU64(&seed);
 			for (int i = 0; i < runcount; i++)
 			{
@@ -1126,11 +1288,12 @@ namespace ui512mdTests
 				reg_verify((u64*)&r_after);
 				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
 			};
-
-			string runmsg = "Divide / x64 function:  path and non-volatile reg tests. Ran " +
-				to_string(runcount) + " times.\n";
-			Logger::WriteMessage(runmsg.c_str());
-			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			{
+				string test_message = _MSGA("Divide by u64 function:  path and non-volatile reg tests. "
+					<< runcount << " times.\n");
+				Logger::WriteMessage(test_message.c_str());
+				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+			}
 		};
 	};
 };

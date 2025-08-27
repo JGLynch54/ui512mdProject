@@ -28,6 +28,27 @@ typedef short s16;
 #define u32_Max UINT32_MAX
 #define u16_Max UINT16_MAX
 
+#define ALIGN64 __declspec(align(64))
+#define _UI512(name) ALIGN64 u64 name[8]
+
+// Macro helper to construct and pass message for Assert
+#define _MSGW(msg) [&]			\
+	{							\
+		std::wstringstream _s;	\
+		 _s << msg;				\
+		 return _s.str();		\
+	 }().c_str()
+
+#define _MSGA(msg) [&]			\
+	{							\
+		std::stringstream _s;	\
+		_s << msg;				\
+		return _s.str();		\
+	}().c_str()
+
+//; string runmsg1 = "Multiply function testing. First test, a simple multiply by two.  "
+//; +to_string(runcount) + " times, each with pseudo random values.\n"
+
 // The struct 'regs' is used in conjunction with unit tests
 // It is used to verify that the non-volatile registers are not altered during calls to assembler routines.
 // The Windows ABI (application binary interface) specifies which registers are for passing parameters, 
