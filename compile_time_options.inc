@@ -29,7 +29,7 @@ __UseQ			EQU				0									; Do not use extensions, use standard x64 bit register
 __UseBMI2		EQU				1									; Bit manipulation instructions (Haswell and later) ref:https://en.wikipedia.org/wiki/X86_Bit_manipulation_instruction_set
 ;
 __VerifyRegs	EQU				1									; in debug mode, or with unit tests, define routine to verify non-volatile regs 
-__CheckAlign	EQU				0									; User is expected to pass arguments aligned on 64 byte boundaries, 
+__CheckAlign	EQU				1									; User is expected to pass arguments aligned on 64 byte boundaries, 
 ;																	; This setting enforces that with a check. It should not be necessary, but included to help debugging
 
 ENDIF			; compile_time_options_INC

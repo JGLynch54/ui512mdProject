@@ -99,6 +99,7 @@ retcode_neg_one	EQU				-1
 ret_zero		DD				retcode_zero						
 ret_one			DD				retcode_one
 ret_neg_one		DD				retcode_neg_one
+ret_GPFault		DD				0C0000005h						; Windows code for General Protection Fault
 
 ;		Masks commonly used
 ;		Record form, which can be used as immediate values. Example: OR	R8D, MASK kMask.b8
@@ -211,9 +212,10 @@ CheckAlign		MACRO			Raddr
 				LOCAL			ok
 	IF	__CheckAlign
 				TEST			Raddr, 63							; Is specified param aligned 64?
-				JZ				ok									; Yes, passes test, continue
-				INT				13									; No? fails, break (can substitute other exception handling)
-ok:
+				JZ				@F									; Yes, passes test, continue
+				MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+				RET													; Return to caller, with GPFault code in EAX
+@@:
 	ENDIF
 				ENDM
 

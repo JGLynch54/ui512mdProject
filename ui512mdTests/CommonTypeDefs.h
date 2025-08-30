@@ -19,15 +19,17 @@ typedef unsigned int u32;
 typedef unsigned long u32l;
 typedef unsigned short u16;
 typedef char u8;
-
 typedef _int64 s64;
 typedef int s32;
 typedef short s16;
+
+// Useful constants:
 
 #define u64_Max UINT64_MAX
 #define u32_Max UINT32_MAX
 #define u16_Max UINT16_MAX
 
+// 64 byte alignment macro and 512 bit (8 QWORD) aligned variable declaration
 #define ALIGN64 __declspec(align(64))
 #define _UI512(name) ALIGN64 u64 name[8]
 
@@ -45,9 +47,6 @@ typedef short s16;
 		_s << msg;				\
 		return _s.str();		\
 	}().c_str()
-
-//; string runmsg1 = "Multiply function testing. First test, a simple multiply by two.  "
-//; +to_string(runcount) + " times, each with pseudo random values.\n"
 
 // The struct 'regs' is used in conjunction with unit tests
 // It is used to verify that the non-volatile registers are not altered during calls to assembler routines.

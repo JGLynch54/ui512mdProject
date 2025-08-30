@@ -18,12 +18,12 @@ ui512mdMacros_INC EQU			<1>
 ;			signatures (from ui512md.asm)
 
 ; //			mult_uT64		-	multiply 512 bit multiplicand by 64 bit multiplier, giving 512 product, 64 bit overflow
-; //			Prototype:		-	void mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
-EXTERNDEF		mult_uT64:PROC	;	void mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
+; //			Prototype:		-	s16 mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
+EXTERNDEF		mult_uT64:PROC	;	s16 mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
 
 ; //			mult_u			-	multiply 512 multiplicand by 512 multiplier, giving 512 product, overflow
-; //			Prototype:		-	void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
-EXTERNDEF		mult_u:PROC		;	void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
+; //			Prototype:		-	s16 mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
+EXTERNDEF		mult_u:PROC		;	s16 mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
 
 ; //			div_uT64		-	divide 512 bit dividend by 64 bit bit divisor, giving 512 bit quotient and 64 bit remainder
 ; //			Prototype:		-	s16 div_u( u64* quotient, u64* remainder, u64* dividend, u64 divisor,);

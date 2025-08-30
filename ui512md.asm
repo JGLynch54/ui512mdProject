@@ -9,7 +9,6 @@
 ;			Date:			June 20, 2024
 ;
 
-
 				INCLUDE			legalnotes.inc
 				INCLUDE			compile_time_options.inc
 				INCLUDE			ui512aMacros.inc
@@ -27,14 +26,14 @@ ui512D			SEGMENT			'RODATA' ALIGN (64)				; Declare a data segment. Read only. A
 ui512D			ENDS
 
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
-;			EXTERNDEF		mult_u:PROC					; void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
+;			EXTERNDEF		mult_u:PROC					; s16 mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
 ;			mult_u			-	multiply 512 multiplicand by 512 multiplier, giving 512 product, 512 overflow
-;			Prototype:		-	void mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
+;			Prototype:		-	s16 mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier);
 ;			product			-	Address of 8 QWORDS to store resulting product (in RCX)
 ;			overflow		-	Address of 8 QWORDS to store resulting overflow (in RDX)
 ;			multiplicand	-	Address of 8 QWORDS multiplicand (in R8)
 ;			multiplier		-	Address of 8 QWORDS multiplier (in R9)
-;			returns			-	nothing (0)
+;			returns			-	(0) for success, (GP_Fault) for mis-aligned parameter address
 ;
 		
 				Other_Entry		mult_u, ui512
@@ -154,14 +153,14 @@ mult_u			ENDP
 
 ;
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
-;			EXTERNDEF		mult_uT64:PROC				;	void mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
+;			EXTERNDEF		mult_uT64:PROC				;	s16 mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
 ;			mult_uT64		-	multiply 512 bit multiplicand by 64 bit multiplier, giving 512 product, 64 bit overflow
-;			Prototype:		-	void mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
+;			Prototype:		-	s16 mult_uT64( u64* product, u64* overflow, u64* multiplicand, u64 multiplier);
 ;			product			-	Address of 8 QWORDS to store resulting product (in RCX)
 ;			overflow		-	Address of QWORD for resulting overflow (in RDX)
 ;			multiplicand	-	Address of 8 QWORDS multiplicand (in R8)
 ;			multiplier		-	multiplier QWORD (in R9)
-;			returns			-	nothing (0)
+;			returns			-	(0) for success, (GP_Fault) for mis-aligned parameter address
 				Other_Entry		mult_uT64, ui512
 mult_uT64		PROC			PUBLIC
 
@@ -210,7 +209,7 @@ mult_uT64		ENDP
 ;			remainder		-	Address of 8 QWORDs for resulting remainder (in RDX)
 ;			dividend		-	Address of 8 QWORDS dividend (in R8)
 ;			divisor			-	Address of 8 QWORDs divisor (in R9)
-;			returns			-	0 for success, -1 for attempt to divide by zero
+;			returns			-	0 for success, -1 for attempt to divide by zero, (GP_Fault) for mis-aligned parameter address
 
 				Other_Entry		div_u, ui512
 div_u			PROC			PUBLIC
@@ -219,8 +218,9 @@ div_u			PROC			PUBLIC
 				LOCAL			qdiv [ 16 ] : QWORD, quotient [ 8 ] : QWORD, normdivisor [ 8 ] : QWORD
 				LOCAL			savedRCX : QWORD, savedRDX : QWORD, savedR8 : QWORD, savedR9 : QWORD
 				LOCAL			savedR10 : QWORD, savedR11 : QWORD, savedR12 : QWORD, savedRBP : QWORD
-				LOCAL			qHat : QWORD, rHat : QWORD,	nDiv : QWORD, addbackRDX : QWORD, addbackR11 : QWORD
-				LOCAL			normf : WORD, jIdx : WORD, mIdx : WORD, nIdx : WORD, mDim : WORD, nDim : Word			
+				LOCAL			qHat : QWORD, rHat : QWORD,	nDiv : QWORD
+				LOCAL			sublen: QWORD, addbackRDX : QWORD, addbackR11 : QWORD
+				LOCAL			normf : WORD, jIdx : WORD, mIdx : WORD, nIdx : WORD, mDim : WORD, nDim : Word	
 				LOCAL			padding2 [ 16 ] : QWORD
 div_oset		EQU				padding2 + 64 - padding1
 
@@ -250,7 +250,7 @@ div_oset		EQU				padding2 + 64 - padding1
 				CMP				AX, -1								; msb < 0? 
 				JE				divbyzero							; divisor is zero, abort
 				CMP				AX, 64								; divisor only one 64-bit word?
-				JMP				mbynDiv								; no, do divide of m digit by n digit				*** NOTE: restore JGE after testing (this allows full div on single word)
+				JGE				mbynDiv								; no, do divide of m digit by n digit
 
 ;	divide of m 64-bit qwords by one 64 bit qword divisor, use the quicker divide routine (div_uT64), and return
 				MOV				RCX, savedRCX						; set up parms for call to div by 64bit: RCX - addr of quotient
@@ -359,37 +359,26 @@ D4:
 				CALL			mult_uT64							; multiply divisor by trial quotient digit (qHat)
 
 		; a little intricate here: 	Need the starting address of the two operands, the shorter of the two (remaining) lengths
-		; expaining the intricacies: the leading digit of the multiplied number needs to line up with the leading digit of the enumerator @ [ R12 ]
+		; explaining the intricacies: the leading digit of the multiplied number needs to line up with the leading digit of the enumerator @ [ R12 ]
 		; the multiply may have added a digit (a qword). The added digit may be in the answer, or may be in the overflow
 		; subtract the result of the multiply from the remaining (current) numerator
-		;
-		;
-		; notes
-		;
-		; leasst significsat (last) qwords of qdiv get subtracted from qwords of currnumerator offset by jIdx
-		; nr words of qdiv is variable. nr words of currnumerator is variable, 
-		; jIdx offset may cause truncated subtract
-		;
-		; so: need len (nr words) of qdiv (qlen); need jidx, need lesser of (8 - jidx) and len of qdiv (sublen), need diff between len of qdiv and sublen (truncoffset)
-		;
-		;	qidx = 7
-		;	cidx = jidx + sublen
-		; loop:>
-		;	sub with borrow qdiv [ qidx - truncoffset ] from currnumerator [ cidx ]
-		;	dec qidx, cidx
-		;	dec sublen
-		;	jnz loop
+
 ; Calculate length of subtraction (sublen)
-;;MOVZX     EAX, nDim                ; number of words in divisor
-;MOVZX     ECX, mDim
-;SUB     ECX, jIdx                ; remaining words in numerator
-;CMP     RAX, RCX
-;CMOVG   RAX, RCX                 ; sublen = min(nDim, mDim - jIdx)
-;MOV     R8, RAX                  ; R8 = sublen
+				MOVZX			EAX, nDim				; number of words in divisor
+				MOVZX		    ECX, mDim
+				SUB				CX, jIdx				; remaining words in numerator
+				CMP				RAX, RCX
+				CMOVG			RAX, RCX				; sublen = min(nDim, mDim - jIdx)
+				MOV				R8, RAX					; R8 = sublen
+				MOV				sublen, RAX	
 
 ; Set up pointers for subtraction
-;LEA     RCX, qdiv [ (8 - R8) * 8 ]           ; RCX = start of relevant qdiv
-;LEA     RDX, currnumerator [ (jIdx + R8 - 1) * 8 ] ; RDX = start of relevant currnumerator
+				LEA				RAX, [ 8 ]							; RAX = 8
+				SUB				RAX, R8						
+				LEA			    RCX, qdiv [ RAX * 8 ]           ; RCX = start of relevant qdiv
+				MOVZX			RAX, jIdx
+				LEA				RAX, [ RAX ][ R8 ] -1
+				LEA			    RDX, currnumerator [ RAX * 8 ] ; RDX = start of relevant currnumerator
 
 ; Save for possible add-back
 				MOV				addbackRDX, RDX
@@ -408,11 +397,11 @@ D5:
 ;			Step D6: Add Back
 D6:
 				DEC				quotient [ RAX * 8 ]				; adjust quotient digit
-			;	MOV				R8, sublen
+				MOV				R8, sublen
 				MOV				RCX, addbackR11
 				MOV				RDX, addbackRDX
-				CALL    @addback
-				JMP     D7
+				CALL			@addback
+				JMP				 D7
 
 ;			Step D7: Loop on j
 D7:
@@ -483,7 +472,7 @@ div_u			ENDP
 ;			remainder		-	Address of QWORD for resulting remainder (in RDX)
 ;			dividend		-	Address of 8 QWORDS dividend (in R8)
 ;			divisor			-	Value of 64 bit divisor (in R9)
-;			returns			-	0 for success, -1 for attempt to divide by zero
+;			returns			-	0 for success, -1 for attempt to divide by zero, (GP_Fault) for mis-aligned parameter address
 ;
 ;			Regs with contents destroyed, not restored: RAX, RDX, R10 (each considered volitile, but caller might optimize on other regs)
 
@@ -518,7 +507,7 @@ div_uT64		PROC			PUBLIC
 				Zero512			RCX									; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
 				XOR				RAX, RAX
 				MOV				Q_PTR [ R10 ] , RAX
-				LEA				EAX, [ retcode_neg_one ]								; return error (div by zero)
+				LEA				EAX, [ retcode_neg_one ]			; return error (div by zero)
 				JMP				@@exit
 
 div_uT64		ENDP
