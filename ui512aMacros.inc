@@ -208,13 +208,16 @@ Section			ENDS
 ;			Note: Better performance if this is off, but for debugging, maybe have it on
 ;
 
-CheckAlign		MACRO			Raddr
-				LOCAL			ok
+CheckAlign		MACRO			Raddr:REQ, ExitLbl:VARARG
 	IF	__CheckAlign
 				TEST			Raddr, 63							; Is specified param aligned 64?
 				JZ				@F									; Yes, passes test, continue
 				MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-				RET													; Return to caller, with GPFault code in EAX
+		IFNB	<ExitLbl>
+				JMP				ExitLbl								; Return to caller, with GPFault code in EAX
+		ELSE
+				INT				3									; No, fault
+		ENDIF
 @@:
 	ENDIF
 				ENDM

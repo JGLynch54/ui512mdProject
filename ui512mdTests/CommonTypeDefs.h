@@ -48,6 +48,24 @@ typedef short s16;
 		return _s.str();		\
 	}().c_str()
 
+// Macro to convert a ui512 variable to a hex string for messaging
+#define _MtoHexString(ui512var) [&]						\
+	{													\
+		std::stringstream _s2;							\
+		_s2 << std::hex << std::uppercase;				\
+		for (int _i = 7; _i >= 0; _i--) {				\
+			_s2.width(16);								\
+			_s2.fill(L'0');								\
+			_s2 << ui512var[_i];						\
+			if (_i > 0) {								\
+				_s2 << " ";								\
+			}											\
+		}												\
+		return _s2.str();								\
+	}().c_str()
+
+
+
 // The struct 'regs' is used in conjunction with unit tests
 // It is used to verify that the non-volatile registers are not altered during calls to assembler routines.
 // The Windows ABI (application binary interface) specifies which registers are for passing parameters, 

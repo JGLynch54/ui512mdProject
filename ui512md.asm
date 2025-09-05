@@ -15,15 +15,16 @@
 				INCLUDE			ui512bMacros.inc
 				INCLUDE			ui512mdMacros.inc
 
-				OPTION			casemap:none
+				OPTION			CASEMAP:NONE
+				OPTION			PROLOGUE:NONE
+				OPTION			EPILOGUE:NONE
 
-ui512D			SEGMENT			'RODATA' ALIGN (64)				; Declare a data segment. Read only. Aligned 64.
+ui512D			SEGMENT			"CONST" ALIGN (64)					; Declare a data segment. Read only. Aligned 64.
 
 				MemConstants
 
 ; end of memory resident constants
-; end of data segment
-ui512D			ENDS
+ui512D			ENDS												; end of data segment
 
 ;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 ;			EXTERNDEF		mult_u:PROC					; s16 mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
@@ -54,11 +55,11 @@ mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local 
 				MOV				savedR11, R11
 				MOV				savedR12, R12
 
-; Check passed parameters alignment
-				CheckAlign		RCX									; (out) Product
-				CheckAlign		RDX									; (out) Overflow
-				CheckAlign		R8									; (in) Multiplicand
-				CheckAlign		R9									; (in) Multiplier
+; Check passed parameters alignment, since this is checked within frame, need to specify exit / cleanup / unwrap label
+				CheckAlign		RCX, @@exit							; (out) Product
+				CheckAlign		RDX, @@exit							; (out) Overflow
+				CheckAlign		R8, @@exit							; (in) Multiplicand
+				CheckAlign		R9, @@exit							; (in) Multiplier
 
 ; Examine multiplicand, save dimensions, handle edge cases of zero or one
 				MOV				RCX, R8								; examine multiplicand
@@ -164,9 +165,9 @@ mult_u			ENDP
 				Other_Entry		mult_uT64, ui512
 mult_uT64		PROC			PUBLIC
 
-; Check passed parameters alignment				
-				CheckAlign		RCX									; (out) Product
-				CheckAlign		R8									; (in) Multiplicand
+; Check passed parameters alignment, since this is checked within frame, need to specify exit / cleanup / unwrap label
+				CheckAlign		RCX, @@exit							; (out) Product
+				CheckAlign		R8, @@exit							; (in) Multiplicand
 
 ; caller might be doing multiply 'in-place', so need to save the original multiplicand, prior to clearing callers product (A = A * x), or (A *= x)
 				FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
@@ -195,6 +196,7 @@ mult_uT64		PROC			PUBLIC
 				ADD				Q_PTR [ RCX ] [ 0 * 8 ], RAX
 				ADC				Q_PTR [ R10 ], RDX					; last qword overflow is also the operation overflow
 				XOR				RAX, RAX							; return zero
+@@exit:
 				RET
 				
 mult_uT64		ENDP
@@ -233,10 +235,10 @@ div_oset		EQU				padding2 + 64 - padding1
 				MOV				savedR11, R11
 				MOV				savedR12, R12
 
-				CheckAlign		RCX									; (out) Quotient
-				CheckAlign		RDX									; (out) Remainder
-				CheckAlign		R8									; (in) Dividend
-				CheckAlign		R9									; (in) Divisor
+				CheckAlign		RCX, cleanupwretcode				; (out) Quotient
+				CheckAlign		RDX, cleanupwretcode				; (out) Remainder
+				CheckAlign		R8, cleanupwretcode					; (in) Dividend
+				CheckAlign		R9, cleanupwretcode					; (in) Divisor
 
 ; Initialize
 				Zero512			RCX									; zero callers quotient
@@ -247,8 +249,9 @@ div_oset		EQU				padding2 + 64 - padding1
  ; Examine divisor
 				MOV				RCX, R9								; divisor
 				CALL			msb_u								; get most significant bit
-				CMP				AX, -1								; msb < 0? 
-				JE				divbyzero							; divisor is zero, abort
+				CMP				AX, 0								; msb < 0? 
+				JL				divbyzero							; divisor is zero, abort
+				JE				divbyone							; divisor is one, exit with remainder = 0, quotient = dividend 
 				CMP				AX, 64								; divisor only one 64-bit word?
 				JGE				mbynDiv								; no, do divide of m digit by n digit
 
@@ -283,7 +286,7 @@ mbynDiv:
 				SHR				nDim, 6								; div msb by 64 to get msq (most significant qword) aka 'n' (zero based Nr qwords)
 				MOV				CX, 7
 				SUB				CX, nDim
-				INC				nDim
+		;		INC				nDim
 				MOV				nIdx, CX							; nIdx now 7 - msb of leading word: aka idx to first qword
 				;
 				MOV				normf, AX
@@ -338,7 +341,7 @@ mbynDiv:
 				MOV				nDiv, RAX							; save and re-use first qword of divisor (used each time to determine qhat)
 				LEA				R12, currnumerator [ 7 * 8 ]
 
-;			Step D3: Calculate  q^
+; Step D3: Calculate  q^
 D3:
 				MOVZX			RCX, jIdx
 				MOV				RDX, Q_PTR [ R12 ] [ RCX * 8 ]
@@ -348,7 +351,7 @@ D3:
 				MOV				qHat, RAX
 				MOV				rHat, RDX
 
-;			Step D4: Multiply trial quotient digit by full normalized divisor, then subtract from working copy of numerator (tricky alignment issues)
+; Step D4: Multiply trial quotient digit by full normalized divisor, then subtract from working copy of numerator (tricky alignment issues)
 D4:
 				LEA				RCX, qdiv
 				Zero512			RCX
@@ -358,27 +361,27 @@ D4:
 				MOV				R9, qHat							; times qhat
 				CALL			mult_uT64							; multiply divisor by trial quotient digit (qHat)
 
-		; a little intricate here: 	Need the starting address of the two operands, the shorter of the two (remaining) lengths
-		; explaining the intricacies: the leading digit of the multiplied number needs to line up with the leading digit of the enumerator @ [ R12 ]
-		; the multiply may have added a digit (a qword). The added digit may be in the answer, or may be in the overflow
-		; subtract the result of the multiply from the remaining (current) numerator
+; a little intricate here: 	Need the starting address of the two operands, the shorter of the two (remaining) lengths
+; explaining the intricacies: the leading digit of the multiplied number needs to line up with the leading digit of the enumerator @ [ R12 ]
+; the multiply may have added a digit (a qword). The added digit may be in the answer, or may be in the overflow
+; subtract the result of the multiply from the remaining (current) numerator
 
 ; Calculate length of subtraction (sublen)
-				MOVZX			EAX, nDim				; number of words in divisor
+				MOVZX			EAX, nDim							; number of words in divisor
 				MOVZX		    ECX, mDim
-				SUB				CX, jIdx				; remaining words in numerator
+				SUB				CX, jIdx							; remaining words in numerator
 				CMP				RAX, RCX
-				CMOVG			RAX, RCX				; sublen = min(nDim, mDim - jIdx)
-				MOV				R8, RAX					; R8 = sublen
+				CMOVG			RAX, RCX							; sublen = min(nDim, mDim - jIdx)
+				MOV				R8, RAX								; R8 = sublen
 				MOV				sublen, RAX	
 
 ; Set up pointers for subtraction
 				LEA				RAX, [ 8 ]							; RAX = 8
 				SUB				RAX, R8						
-				LEA			    RCX, qdiv [ RAX * 8 ]           ; RCX = start of relevant qdiv
+				LEA			    RCX, qdiv [ RAX * 8 ]				; RCX = start of relevant qdiv
 				MOVZX			RAX, jIdx
 				LEA				RAX, [ RAX ][ R8 ] -1
-				LEA			    RDX, currnumerator [ RAX * 8 ] ; RDX = start of relevant currnumerator
+				LEA			    RDX, currnumerator [ RAX * 8 ]		; RDX = start of relevant currnumerator
 
 ; Save for possible add-back
 				MOV				addbackRDX, RDX
@@ -387,14 +390,14 @@ D4:
 ; Call subtraction subroutine
 				CALL    @sub
 
-;			Step D5: Test remainder
+; Step D5: Test remainder
 D5:
 				MOVZX			RAX, jIdx
 				MOV				RCX, qHat
 				MOV				quotient [ RAX * 8 ], RCX			; Set quotient digit [ j ] 
 				JNC				D7									; Carry (from above) indicates result of subtract went negative, need D6 add back, else on to D7
 
-;			Step D6: Add Back
+; Step D6: Add Back
 D6:
 				DEC				quotient [ RAX * 8 ]				; adjust quotient digit
 				MOV				R8, sublen
@@ -403,13 +406,13 @@ D6:
 				CALL			@addback
 				JMP				 D7
 
-;			Step D7: Loop on j
+; Step D7: Loop on j
 D7:
 				INC				jIdx								; increase loop counter
 				CMP				jIdx, 8								; done?
 				JLE				D3									; no, loop to D3
 
-;			Step D8: Un Normalize:
+; Step D8: Un Normalize:
 D8UnNormalize:
 				MOV				RCX, savedRDX						; reduced working numerator is now the remainder
 				LEA				RDX, currnumerator [ 8 * 8 ]		; shifted result to callers remainder
@@ -435,8 +438,16 @@ divbyzero:
 				LEA				EAX, [ retcode_neg_one ]
 				JMP				cleanupwretcode
 
-numtoremain:	MOV				R8, savedR8
-				MOV				RDX, savedRDX
+divbyone:
+				MOV				RCX, savedRCX						; callers quotient
+				MOV				R8,  savedR8						; callers dividend
+				Copy512			RCX, R8								; copy dividend to quotient
+				MOV				RDX, savedRDX						; callers remainder	
+				Zero512			RDX									; remainder is zero
+				JMP				cleanupret
+
+numtoremain:	MOV				R8, savedR8							; callers dividend
+				MOV				RDX, savedRDX						; callers remainder
 				Copy512			RDX, R8
 				JMP				cleanupret
 ; subroutine (called) to subtract n digits at [RCX] from [RDX] count of digits in R8

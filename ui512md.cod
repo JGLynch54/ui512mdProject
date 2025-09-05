@@ -1,4 +1,4 @@
-Microsoft (R) Macro Assembler (x64) Version 14.44.35215.0   08/28/25 19:12:55
+Microsoft (R) Macro Assembler (x64) Version 14.44.35215.0   09/04/25 22:46:35
 ui512md.asm						     Page 1 - 1
 
 
@@ -169,7 +169,7 @@ ui512md.asm						     Page 1 - 1
  = 00000001		      C __UseZ			EQU				1									; Use AVX4 processor features (512 bit registers and instructions)
  = 00000000		      C __UseY			EQU				0									; Use AVX2 processor features (256 bit registers and instructions)
  = 00000000		      C __UseX			EQU				0									; Use SIMD/SSE processor features (128 bit registers and instructions)
- = 00000000		      C __UseQ			EQU				0									; Do not use extensions, use standard x64 bit registers and instructions
+ = 00000001		      C __UseQ			EQU				1									; Do not use extensions, use standard x64 bit registers and instructions
 			      C ;
  = 00000001		      C __UseBMI2		EQU				1									; Bit manipulation instructions (Haswell and later) ref:https://en.wikipedia.org/wiki/X86_Bit_manipulation_instruction_set
 			      C ;
@@ -454,13 +454,16 @@ ui512md.asm						     Page 1 - 1
 			      C ;			Note: Better performance if this is off, but for debugging, maybe have it on
 			      C ;
 			      C 
-			      C CheckAlign		MACRO			Raddr
-			      C 				LOCAL			ok
+			      C CheckAlign		MACRO			Raddr:REQ, ExitLbl:VARARG
 			      C 	IF	__CheckAlign
 			      C 				TEST			Raddr, 63							; Is specified param aligned 64?
 			      C 				JZ				@F									; Yes, passes test, continue
 			      C 				MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			      C 				RET													; Return to caller, with GPFault code in EAX
+			      C 		IFNB	<ExitLbl>
+			      C 				JMP				ExitLbl								; Return to caller, with GPFault code in EAX
+			      C 		ELSE
+			      C 				INT				3									; No, fault
+			      C 		ENDIF
 			      C @@:
 			      C 	ENDIF
 			      C 				ENDM
@@ -944,9 +947,11 @@ ui512md.asm						     Page 1 - 1
 			      C ENDIF
 			      C 
 
-								OPTION			casemap:none
+								OPTION			CASEMAP:NONE
+								OPTION			PROLOGUE:NONE
+								OPTION			EPILOGUE:NONE
 
- 00000000			ui512D			SEGMENT			'RODATA' ALIGN (64)				; Declare a data segment. Read only. Aligned 64.
+ 00000000			ui512D			SEGMENT			"CONST" ALIGN (64)					; Declare a data segment. Read only. Aligned 64.
 
 								MemConstants
 			     1	; 
@@ -981,8 +986,7 @@ ui512md.asm						     Page 1 - 1
  00000060 FF		     1	mskAll8			DB				255
 
 				; end of memory resident constants
-				; end of data segment
- 00000061			ui512D			ENDS
+ 00000061			ui512D			ENDS												; end of data segment
 
 				;--------------------------------------------------------------------------------------------------------------------------------------------------------------
 				;			EXTERNDEF		mult_u:PROC					; s16 mult_u( u64* product, u64* overflow, u64* multiplicand, u64* multiplier)
@@ -1012,125 +1016,126 @@ ui512md.asm						     Page 1 - 1
  = padding2 + 64 - padding1	mult_u_ofs		EQU				padding2 + 64 - padding1			; offset is the size of the local memory declarations
 
 								CreateFrame		220h, savedRBP
- 00000010  55		   *	    push   rbp
- 00000011  48/ 8B EC	   *	    mov    rbp, rsp
- 00000014  48/ 81 C4
-	   FFFFFE88	   *	    add    rsp, 0FFFFFE88h
- 0000001B  55		     1					PUSH			RBP
- 0000001C  48/ 8B EC	     1					MOV				RBP, RSP
- 0000001F  48/ 83 E4 F8	     1					AND				RSP, -8
- 00000023  48/ 81 EC	     1					SUB				RSP, 220h + 64					; make a gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
+ 00000010  55		     1					PUSH			RBP
+ 00000011  48/ 8B EC	     1					MOV				RBP, RSP
+ 00000014  48/ 83 E4 F8	     1					AND				RSP, -8
+ 00000018  48/ 81 EC	     1					SUB				RSP, 220h + 64					; make a gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
 	   00000260
- 0000002A  48/ C7 C0	     1					MOV				RAX, -64							; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
+ 0000001F  48/ C7 C0	     1					MOV				RAX, -64							; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
 	   FFFFFFC0
- 00000031  48/ 23 C5	     1					AND				RAX, RBP							; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
- 00000034  48/ 95	     1					XCHG			RAX, RBP							; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
- 00000036  48/ 89 85	     1					MOV				savedRBP, RAX					; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
+ 00000026  48/ 23 C5	     1					AND				RAX, RBP							; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
+ 00000029  48/ 95	     1					XCHG			RAX, RBP							; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
+ 0000002B  48/ 89 85	     1					MOV				savedRBP, RAX					; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
 	   FFFFFF38
- 0000003D  48/ 89 8D						MOV				savedRCX, RCX
+ 00000032  48/ 89 8D						MOV				savedRCX, RCX
 	   FFFFFF30
- 00000044  48/ 89 95						MOV				savedRDX, RDX
+ 00000039  48/ 89 95						MOV				savedRDX, RDX
 	   FFFFFF28
- 0000004B  4C/ 89 95						MOV				savedR10, R10
+ 00000040  4C/ 89 95						MOV				savedR10, R10
 	   FFFFFF20
- 00000052  4C/ 89 9D						MOV				savedR11, R11
+ 00000047  4C/ 89 9D						MOV				savedR11, R11
 	   FFFFFF18
- 00000059  4C/ 89 A5						MOV				savedR12, R12
+ 0000004E  4C/ 89 A5						MOV				savedR12, R12
 	   FFFFFF10
 
-				; Check passed parameters alignment
-								CheckAlign		RCX									; (out) Product
-			     1					LOCAL			ok
+				; Check passed parameters alignment, since this is checked within frame, need to specify exit / cleanup / unwrap label
+								CheckAlign		RCX, @@exit							; (out) Product
 			     1		IF	__CheckAlign
- 00000060  48/ F7 C1	     1					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000055  48/ F7 C1	     1					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000067  74 08	     1					JZ				@F									; Yes, passes test, continue
- 00000069  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 0000006F  C9		   *	    leave  
- 00000070  C3		   *	    ret    00000h
- 00000071		     1	@@:
+ 0000005C  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 0000005E  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<@@exit>
+ 00000064  E9 000001B0	     1					JMP				@@exit								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000069		     1	@@:
 			     1		ENDIF
-								CheckAlign		RDX									; (out) Overflow
-			     1					LOCAL			ok
+								CheckAlign		RDX, @@exit							; (out) Overflow
 			     1		IF	__CheckAlign
- 00000071  48/ F7 C2	     1					TEST			RDX, 63							; Is specified param aligned 64?
+ 00000069  48/ F7 C2	     1					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000078  74 08	     1					JZ				@F									; Yes, passes test, continue
- 0000007A  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 00000080  C9		   *	    leave  
- 00000081  C3		   *	    ret    00000h
- 00000082		     1	@@:
+ 00000070  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 00000072  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<@@exit>
+ 00000078  E9 0000019C	     1					JMP				@@exit								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 0000007D		     1	@@:
 			     1		ENDIF
-								CheckAlign		R8									; (in) Multiplicand
-			     1					LOCAL			ok
+								CheckAlign		R8, @@exit							; (in) Multiplicand
 			     1		IF	__CheckAlign
- 00000082  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
+ 0000007D  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
 	   0000003F
- 00000089  74 08	     1					JZ				@F									; Yes, passes test, continue
- 0000008B  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 00000091  C9		   *	    leave  
- 00000092  C3		   *	    ret    00000h
- 00000093		     1	@@:
+ 00000084  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 00000086  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<@@exit>
+ 0000008C  E9 00000188	     1					JMP				@@exit								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000091		     1	@@:
 			     1		ENDIF
-								CheckAlign		R9									; (in) Multiplier
-			     1					LOCAL			ok
+								CheckAlign		R9, @@exit							; (in) Multiplier
 			     1		IF	__CheckAlign
- 00000093  49/ F7 C1	     1					TEST			R9, 63							; Is specified param aligned 64?
+ 00000091  49/ F7 C1	     1					TEST			R9, 63							; Is specified param aligned 64?
 	   0000003F
- 0000009A  74 08	     1					JZ				@F									; Yes, passes test, continue
- 0000009C  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 000000A2  C9		   *	    leave  
- 000000A3  C3		   *	    ret    00000h
- 000000A4		     1	@@:
+ 00000098  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 0000009A  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<@@exit>
+ 000000A0  E9 00000174	     1					JMP				@@exit								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 000000A5		     1	@@:
 			     1		ENDIF
 
 				; Examine multiplicand, save dimensions, handle edge cases of zero or one
- 000000A4  49/ 8B C8						MOV				RCX, R8								; examine multiplicand
- 000000A7  E8 00000000 E					CALL			msb_u								; get count to most significant bit (-1 if no bits)
- 000000AC  66| 83 F8 00						CMP				AX, 0								
- 000000B0  0F 8C 0000018A					JL				@@zeroandexit						; msb < 0? multiplicand = 0; exit with product = 0
- 000000B6  49/ 8D 11						LEA				RDX, [ R9 ]							; multiplicand = 1?	exit with product = multiplier -> address of multiplier (to be copied to product)
- 000000B9  0F 84 000001CB					JE				@@copyandexit
- 000000BF  66| C1 E8 06						SHR				AX, 6								; divide msb by 64 to get Nr words
- 000000C3  66| 8D 0C 25						LEA				CX, [ 7 ]
+ 000000A5  49/ 8B C8						MOV				RCX, R8								; examine multiplicand
+ 000000A8  E8 00000000 E					CALL			msb_u								; get count to most significant bit (-1 if no bits)
+ 000000AD  66| 83 F8 00						CMP				AX, 0								
+ 000000B1  0F 8C 00000183					JL				@@zeroandexit						; msb < 0? multiplicand = 0; exit with product = 0
+ 000000B7  49/ 8D 11						LEA				RDX, [ R9 ]							; multiplicand = 1?	exit with product = multiplier -> address of multiplier (to be copied to product)
+ 000000BA  0F 84 000001C2					JE				@@copyandexit
+ 000000C0  66| C1 E8 06						SHR				AX, 6								; divide msb by 64 to get Nr words
+ 000000C4  66| 8D 0C 25						LEA				CX, [ 7 ]
 	   00000007
- 000000CB  66| 2B C8						SUB				CX, AX								; subtract from 7 to get starting (high order, left-most) beginning index
- 000000CE  66| 89 8D						MOV				candl, CX							; save off multiplicand index lower limit (eliminate multiplying leading zero words)
+ 000000CC  66| 2B C8						SUB				CX, AX								; subtract from 7 to get starting (high order, left-most) beginning index
+ 000000CF  66| 89 8D						MOV				candl, CX							; save off multiplicand index lower limit (eliminate multiplying leading zero words)
 	   FFFFFF0C
 
 				; Examine multiplier, save dimensions, handle edge cases of zero or one
- 000000D5  49/ 8B C9						MOV				RCX, R9								; examine multiplier
- 000000D8  E8 00000000 E					CALL			msb_u								; get count to most significant bit (-1 if no bits)
- 000000DD  66| 83 F8 00						CMP				AX, 0								; multiplier = 0? exit with product = 0
- 000000E1  0F 8C 00000159					JL				@@zeroandexit
- 000000E7  49/ 8D 10						LEA				RDX, [ R8 ]							; multiplier = 1? exit with product = multiplicand -> address of multiplicand (to be copied to product)
- 000000EA  0F 84 0000019A					JE				@@copyandexit
- 000000F0  66| C1 E8 06						SHR				AX, 6								; divide msb by 64 to get Nr words
- 000000F4  66| 8D 0C 25						LEA				CX, [ 7 ]
+ 000000D6  49/ 8B C9						MOV				RCX, R9								; examine multiplier
+ 000000D9  E8 00000000 E					CALL			msb_u								; get count to most significant bit (-1 if no bits)
+ 000000DE  66| 83 F8 00						CMP				AX, 0								; multiplier = 0? exit with product = 0
+ 000000E2  0F 8C 00000152					JL				@@zeroandexit
+ 000000E8  49/ 8D 10						LEA				RDX, [ R8 ]							; multiplier = 1? exit with product = multiplicand -> address of multiplicand (to be copied to product)
+ 000000EB  0F 84 00000191					JE				@@copyandexit
+ 000000F1  66| C1 E8 06						SHR				AX, 6								; divide msb by 64 to get Nr words
+ 000000F5  66| 8D 0C 25						LEA				CX, [ 7 ]
 	   00000007
- 000000FC  66| 2B C8						SUB				CX, AX								; subtract from 7 to get starting (high order, left-most) beginning index
- 000000FF  66| 89 8D						MOV				plierl, CX							; save off multiplier index lower limit (eliminate multiplying leading zero words)
+ 000000FD  66| 2B C8						SUB				CX, AX								; subtract from 7 to get starting (high order, left-most) beginning index
+ 00000100  66| 89 8D						MOV				plierl, CX							; save off multiplier index lower limit (eliminate multiplying leading zero words)
 	   FFFFFF0E
 
 				; In frame / stack reserved memory, clear 16 qword area for working version of overflow/product; set up indexes for loop
- 00000106  48/ 8D 8D				LEA				RCX, product [ 0 ]
+ 00000107  48/ 8D 8D						LEA				RCX, product [ 0 ]
 	   FFFFFF40
 								Zero512			RCX									; clear working copy of overflow, need to start as zero, results are accumulated
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 0000010D  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 0000010E  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000114  74 08	     2					JZ				@F									; Yes, passes test, continue
- 00000116  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 0000011C  C9		   *	    leave  
- 0000011D  C3		   *	    ret    00000h
+ 00000115  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000117  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000011D  CC		     2					INT				3									; No, fault
+			     2			ENDIF
  0000011E		     2	@@:
 			     2		ENDIF
  0000011E  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
@@ -1159,20 +1164,21 @@ ui512md.asm						     Page 1 - 1
 								Zero512			RCX									; clear working copy of product (they need to be contiguous, so using working copy, not callers)
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
  0000012E  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000135  74 08	     2					JZ				@F									; Yes, passes test, continue
+ 00000135  74 07	     2					JZ				@F									; Yes, passes test, continue
  00000137  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 0000013D  C9		   *	    leave  
- 0000013E  C3		   *	    ret    00000h
- 0000013F		     2	@@:
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000013D  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 0000013E		     2	@@:
 			     2		ENDIF
- 0000013F  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 0000013E  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 00000145  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000144  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1192,72 +1198,74 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 0000014B  4C/ 8D 1C 25						LEA				R11, [ 7 ] 							; index for multiplier (reduced until less than saved plierl) (outer loop)
+ 0000014A  4C/ 8D 1C 25						LEA				R11, [ 7 ] 							; index for multiplier (reduced until less than saved plierl) (outer loop)
 	   00000007
- 00000153  4D/ 8D 23						LEA				R12, [ R11 ]						; index for multiplicand (reduced until less than saved candl) (inner loop)
+ 00000152  4D/ 8D 23						LEA				R12, [ R11 ]						; index for multiplicand (reduced until less than saved candl) (inner loop)
 
 				; multiply loop: an outer loop for each non-zero qword of multiplicand, with an inner loop for each non-zero qword of multiplier, results accumulated in 'product'
- 00000156			@@multloop:
- 00000156  4F/ 8D 14 23						LEA				R10, [ R11 ] [ R12 ]				; R10 holds index for overflow / product work area (results)
- 0000015A  49/ FF C2						INC				R10									; index for product/overflow 
- 0000015D  4B/ 8B 04 E0						MOV				RAX, Q_PTR [ R8 ] [ R12 * 8 ]		; get qword of multiplicand
- 00000161  4B/ F7 24 D9						MUL				Q_PTR [ R9 ] [ R11 * 8 ]			; multiply by qword of multiplier
- 00000165  4A/ 01 84 D5						ADD				product [ R10 * 8 ], RAX			; accummulate in product, this is low-order 64 bits of result of mul
+ 00000155			@@multloop:
+ 00000155  4F/ 8D 14 23						LEA				R10, [ R11 ] [ R12 ]				; R10 holds index for overflow / product work area (results)
+ 00000159  49/ FF C2						INC				R10									; index for product/overflow 
+ 0000015C  4B/ 8B 04 E0						MOV				RAX, Q_PTR [ R8 ] [ R12 * 8 ]		; get qword of multiplicand
+ 00000160  4B/ F7 24 D9						MUL				Q_PTR [ R9 ] [ R11 * 8 ]			; multiply by qword of multiplier
+ 00000164  4A/ 01 84 D5						ADD				product [ R10 * 8 ], RAX			; accummulate in product, this is low-order 64 bits of result of mul
 	   FFFFFF40
- 0000016D  49/ FF CA						DEC				R10									; preserves carry flag
- 00000170			@@:
- 00000170  4A/ 11 94 D5						ADC				product [ R10 * 8 ], RDX			; high-order result of 64bit multiply, plus the carry (if any)
+ 0000016C  49/ FF CA						DEC				R10									; preserves carry flag
+ 0000016F			@@:
+ 0000016F  4A/ 11 94 D5						ADC				product [ R10 * 8 ], RDX			; high-order result of 64bit multiply, plus the carry (if any)
 	   FFFFFF40
- 00000178  48/ 8D 14 25						LEA				RDX, [ 0 ]							; again, preserves carry flag
+ 00000177  48/ 8D 14 25						LEA				RDX, [ 0 ]							; again, preserves carry flag
 	   00000000
- 00000180  73 05						JNC				@F									; if adding caused carry, propagate it, else next 
- 00000182  49/ FF CA						DEC				R10									; propagating carry
- 00000185  7D E9						JGE				@B
- 00000187			@@:																	; next qword of multiplicand
- 00000187  49/ FF CC						DEC				R12
- 0000018A  66| 44/ 3B A5					CMP				R12W, candl							; Done with inner loop?
+ 0000017F  73 05						JNC				@F									; if adding caused carry, propagate it, else next 
+ 00000181  49/ FF CA						DEC				R10									; propagating carry
+ 00000184  7D E9						JGE				@B
+ 00000186			@@:																	; next qword of multiplicand
+ 00000186  49/ FF CC						DEC				R12
+ 00000189  66| 44/ 3B A5					CMP				R12W, candl							; Done with inner loop?
 	   FFFFFF0C
- 00000192  7D C2						JGE				@@multloop							; no, do it again
- 00000194  4C/ 8D 24 25						LEA				R12, [ 7 ]							; yes, reset inner loop (multiplicand) index
+ 00000191  7D C2						JGE				@@multloop							; no, do it again
+ 00000193  4C/ 8D 24 25						LEA				R12, [ 7 ]							; yes, reset inner loop (multiplicand) index
 	   00000007
- 0000019C  49/ FF CB						DEC				R11									; decrement index for outer loop
- 0000019F  66| 44/ 3B 9D					CMP				R11W, plierl						; done with outer loop?
+ 0000019B  49/ FF CB						DEC				R11									; decrement index for outer loop
+ 0000019E  66| 44/ 3B 9D					CMP				R11W, plierl						; done with outer loop?
 	   FFFFFF0E
- 000001A7  7D AD						JGE				@@multloop							; no, do it again with next qword of multiplier
+ 000001A6  7D AD						JGE				@@multloop							; no, do it again with next qword of multiplier
 
 				; finished: copy working product/overflow to callers product / overflow
- 000001A9  48/ 8B 8D						MOV				RCX, savedRCX
+ 000001A8  48/ 8B 8D						MOV				RCX, savedRCX
 	   FFFFFF30
- 000001B0  48/ 8D 55 80						LEA				RDX, product [ 8 * 8 ]
+ 000001AF  48/ 8D 55 80						LEA				RDX, product [ 8 * 8 ]
 								Copy512			RCX, RDX							; copy working product to callers product
 			     1		IF		__UseZ 
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000001B4  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 000001B3  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000001BB  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000001BD  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000001C3  C9		   *	    leave  
- 000001C4  C3		   *	    ret    00000h
- 000001C5		     2	@@:
+ 000001BA  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000001BC  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000001C2  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000001C3		     2	@@:
 			     2		ENDIF
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000001C5  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+ 000001C3  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 000001CC  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000001CE  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000001D4  C9		   *	    leave  
- 000001D5  C3		   *	    ret    00000h
- 000001D6		     2	@@:
+ 000001CA  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000001CC  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000001D2  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000001D3		     2	@@:
 			     2		ENDIF
- 000001D6  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
+ 000001D3  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
 	   3A
- 000001DC  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 000001D9  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1283,39 +1291,41 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 000001E2  48/ 8B 8D						MOV				RCX, savedRDX
+ 000001DF  48/ 8B 8D						MOV				RCX, savedRDX
 	   FFFFFF28
- 000001E9  48/ 8D 95						LEA				RDX, product [ 0 ]
+ 000001E6  48/ 8D 95						LEA				RDX, product [ 0 ]
 	   FFFFFF40
 								Copy512			RCX, RDX							; copy working overflow to callers overflow
 			     1		IF		__UseZ 
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000001F0  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 000001ED  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000001F7  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000001F9  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000001FF  C9		   *	    leave  
- 00000200  C3		   *	    ret    00000h
- 00000201		     2	@@:
+ 000001F4  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000001F6  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000001FC  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000001FD		     2	@@:
 			     2		ENDIF
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000201  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+ 000001FD  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000208  74 08	     2					JZ				@F									; Yes, passes test, continue
- 0000020A  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 00000210  C9		   *	    leave  
- 00000211  C3		   *	    ret    00000h
- 00000212		     2	@@:
+ 00000204  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000206  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000020C  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 0000020D		     2	@@:
 			     2		ENDIF
- 00000212  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
+ 0000020D  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
 	   3A
- 00000218  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000213  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1343,43 +1353,43 @@ ui512md.asm						     Page 1 - 1
 			     1		ENDIF
 
 				; restore regs, release frame, return
- 0000021E			@@exit:			
- 0000021E  4C/ 8B 95						MOV				R10, savedR10
+ 00000219			@@exit:			
+ 00000219  4C/ 8B 95						MOV				R10, savedR10
 	   FFFFFF20
- 00000225  4C/ 8B 9D						MOV				R11, savedR11
+ 00000220  4C/ 8B 9D						MOV				R11, savedR11
 	   FFFFFF18
- 0000022C  4C/ 8B A5						MOV				R12, savedR12						; restore any non-volitile regs used
+ 00000227  4C/ 8B A5						MOV				R12, savedR12						; restore any non-volitile regs used
 	   FFFFFF10
 								ReleaseFrame	savedRBP
- 00000233  48/ 8B A5	     1					MOV				RSP, savedRBP					; restore unadjusted / unrounded (the as when called) stack pointer (eliminating LOCAL storage) 
+ 0000022E  48/ 8B A5	     1					MOV				RSP, savedRBP					; restore unadjusted / unrounded (the as when called) stack pointer (eliminating LOCAL storage) 
 	   FFFFFF38
- 0000023A  5D		     1					POP				RBP									; restore base pointer for caller
- 0000023B  48/ 33 C0						XOR				RAX, RAX							; return zero
+ 00000235  5D		     1					POP				RBP									; restore base pointer for caller
+ 00000236  48/ 33 C0						XOR				RAX, RAX							; return zero
 								RET
- 0000023E  C9		   *	    leave  
- 0000023F  C3		   *	    ret    00000h
+ 00000239  C3		   *	    ret    00000h
 
 				; zero callers product and overflow
- 00000240			@@zeroandexit:
- 00000240  48/ 8B 8D						MOV				RCX, savedRCX						; reload address of callers product
+ 0000023A			@@zeroandexit:
+ 0000023A  48/ 8B 8D						MOV				RCX, savedRCX						; reload address of callers product
 	   FFFFFF30
 								Zero512			RCX									; zero it
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000247  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000241  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 0000024E  74 08	     2					JZ				@F									; Yes, passes test, continue
- 00000250  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 00000256  C9		   *	    leave  
- 00000257  C3		   *	    ret    00000h
- 00000258		     2	@@:
+ 00000248  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 0000024A  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 00000250  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 00000251		     2	@@:
 			     2		ENDIF
- 00000258  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000251  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000025E  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 00000257  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1399,25 +1409,26 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 00000264  48/ 8B 8D						MOV				RCX, savedRDX						; reload address of caller overflow
+ 0000025D  48/ 8B 8D						MOV				RCX, savedRDX						; reload address of caller overflow
 	   FFFFFF28
 								Zero512			RCX									; zero it
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 0000026B  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000264  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000272  74 08	     2					JZ				@F									; Yes, passes test, continue
- 00000274  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 0000027A  C9		   *	    leave  
- 0000027B  C3		   *	    ret    00000h
- 0000027C		     2	@@:
+ 0000026B  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 0000026D  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 00000273  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 00000274		     2	@@:
 			     2		ENDIF
- 0000027C  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000274  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 00000282  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 0000027A  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1437,29 +1448,30 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 00000288  EB 94						JMP				@@exit
+ 00000280  EB 97						JMP				@@exit
 
 				; multiplying by 1: zero overflow, copy the non-one to the product
- 0000028A			@@copyandexit:
- 0000028A  48/ 8B 8D						MOV				RCX, savedRDX						; address of passed overflow
+ 00000282			@@copyandexit:
+ 00000282  48/ 8B 8D						MOV				RCX, savedRDX						; address of passed overflow
 	   FFFFFF28
 								Zero512			RCX 								; zero it
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000291  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000289  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000298  74 08	     2					JZ				@F									; Yes, passes test, continue
- 0000029A  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000002A0  C9		   *	    leave  
- 000002A1  C3		   *	    ret    00000h
- 000002A2		     2	@@:
+ 00000290  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000292  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 00000298  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 00000299		     2	@@:
 			     2		ENDIF
- 000002A2  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000299  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 000002A8  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 0000029F  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1479,37 +1491,39 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 000002AE  48/ 8B 8D						MOV				RCX, savedRCX						; copy (whichever: multiplier or multiplicand) to callers product
+ 000002A5  48/ 8B 8D						MOV				RCX, savedRCX						; copy (whichever: multiplier or multiplicand) to callers product
 	   FFFFFF30
 								Copy512			RCX, RDX							; RDX "passed" here from whomever jumped here (either &multiplier, or &multiplicand in RDX)
 			     1		IF		__UseZ 
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000002B5  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 000002AC  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000002BC  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000002BE  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000002C4  C9		   *	    leave  
- 000002C5  C3		   *	    ret    00000h
- 000002C6		     2	@@:
+ 000002B3  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000002B5  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000002BB  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000002BC		     2	@@:
 			     2		ENDIF
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000002C6  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+ 000002BC  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 000002CD  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000002CF  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000002D5  C9		   *	    leave  
- 000002D6  C3		   *	    ret    00000h
- 000002D7		     2	@@:
+ 000002C3  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000002C5  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000002CB  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000002CC		     2	@@:
 			     2		ENDIF
- 000002D7  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
+ 000002CC  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
 	   3A
- 000002DD  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 000002D2  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1535,11 +1549,11 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 000002E3  E9 FFFFFF36						JMP				@@exit								; and exit
+ 000002D8  E9 FFFFFF3C						JMP				@@exit								; and exit
 								
- 000002E8			mult_u			ENDP				
+ 000002DD			mult_u			ENDP				
 								Other_Exit		mult_u, ui512
- 000002E8		     1	ui512			ENDS
+ 000002DD		     1	ui512			ENDS
 
 				;
 				;--------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1552,68 +1566,74 @@ ui512md.asm						     Page 1 - 1
 				;			multiplier		-	multiplier QWORD (in R9)
 				;			returns			-	(0) for success, (GP_Fault) for mis-aligned parameter address
 								Other_Entry		mult_uT64, ui512
- 000002E8		     1	ui512			SEGMENT			PARA 'CODE'
- 000002E8  00000006 [	     1					DB				6 DUP (0cch)
+ 000002DD		     1	ui512			SEGMENT			PARA 'CODE'
+ 000002DD  00000006 [	     1					DB				6 DUP (0cch)
 	    CC
 	   ]
 			     1					ALIGN			16
  000002F0			mult_uT64		PROC			PUBLIC
 
-				; Check passed parameters alignment				
-								CheckAlign		RCX									; (out) Product
-			     1					LOCAL			ok
+				; Check passed parameters alignment, since this is checked within frame, need to specify exit / cleanup / unwrap label
+								CheckAlign		RCX, @@exit							; (out) Product
 			     1		IF	__CheckAlign
  000002F0  48/ F7 C1	     1					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000002F7  74 07	     1					JZ				@F									; Yes, passes test, continue
+ 000002F7  74 0B	     1					JZ				@F									; Yes, passes test, continue
  000002F9  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
- 000002FF  C3		     1					RET													; Return to caller, with GPFault code in EAX
- 00000300		     1	@@:
+			     1			IFNB	<@@exit>
+ 000002FF  E9 000000BE	     1					JMP				@@exit								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000304		     1	@@:
 			     1		ENDIF
-								CheckAlign		R8									; (in) Multiplicand
-			     1					LOCAL			ok
+								CheckAlign		R8, @@exit							; (in) Multiplicand
 			     1		IF	__CheckAlign
- 00000300  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
+ 00000304  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
 	   0000003F
- 00000307  74 07	     1					JZ				@F									; Yes, passes test, continue
- 00000309  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
- 0000030F  C3		     1					RET													; Return to caller, with GPFault code in EAX
- 00000310		     1	@@:
+ 0000030B  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 0000030D  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<@@exit>
+ 00000313  E9 000000AA	     1					JMP				@@exit								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000318		     1	@@:
 			     1		ENDIF
 
 				; caller might be doing multiply 'in-place', so need to save the original multiplicand, prior to clearing callers product (A = A * x), or (A *= x)
 								FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
 								PUSH			Q_PTR [ R8 ] [ idx * 8 ]
 								ENDM
- 00000310  41/ FF 30	     1					PUSH			Q_PTR [ R8 ] [ 0 * 8 ]
- 00000313  41/ FF 70 08	     1					PUSH			Q_PTR [ R8 ] [ 1 * 8 ]
- 00000317  41/ FF 70 10	     1					PUSH			Q_PTR [ R8 ] [ 2 * 8 ]
- 0000031B  41/ FF 70 18	     1					PUSH			Q_PTR [ R8 ] [ 3 * 8 ]
- 0000031F  41/ FF 70 20	     1					PUSH			Q_PTR [ R8 ] [ 4 * 8 ]
- 00000323  41/ FF 70 28	     1					PUSH			Q_PTR [ R8 ] [ 5 * 8 ]
- 00000327  41/ FF 70 30	     1					PUSH			Q_PTR [ R8 ] [ 6 * 8 ]
- 0000032B  41/ FF 70 38	     1					PUSH			Q_PTR [ R8 ] [ 7 * 8 ]
+ 00000318  41/ FF 30	     1					PUSH			Q_PTR [ R8 ] [ 0 * 8 ]
+ 0000031B  41/ FF 70 08	     1					PUSH			Q_PTR [ R8 ] [ 1 * 8 ]
+ 0000031F  41/ FF 70 10	     1					PUSH			Q_PTR [ R8 ] [ 2 * 8 ]
+ 00000323  41/ FF 70 18	     1					PUSH			Q_PTR [ R8 ] [ 3 * 8 ]
+ 00000327  41/ FF 70 20	     1					PUSH			Q_PTR [ R8 ] [ 4 * 8 ]
+ 0000032B  41/ FF 70 28	     1					PUSH			Q_PTR [ R8 ] [ 5 * 8 ]
+ 0000032F  41/ FF 70 30	     1					PUSH			Q_PTR [ R8 ] [ 6 * 8 ]
+ 00000333  41/ FF 70 38	     1					PUSH			Q_PTR [ R8 ] [ 7 * 8 ]
 
 				; clear callers product and overflow
 				;	Note: if caller used multiplicand and product as the same variable (memory space),
 				;	this would wipe the multiplicand. Hence the saving of the multiplicand on the stack. (above)
- 0000032F  48/ 33 C0						XOR				RAX, RAX
+ 00000337  48/ 33 C0						XOR				RAX, RAX
 								Zero512Q		RCX		   							; clear callers product (multiply uses an addition with carry, so it needs to start zeroed)
- 00000332  48/ 33 C0	     1					XOR				RAX, RAX
+ 0000033A  48/ 33 C0	     1					XOR				RAX, RAX
 			     1					FOR				idx,  < 0, 1, 2, 3, 4, 5, 6, 7 >
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
- 00000335  48/ 89 01	     2					MOV				Q_PTR [ RCX ] [ 0 * 8 ], RAX
- 00000338  48/ 89 41 08	     2					MOV				Q_PTR [ RCX ] [ 1 * 8 ], RAX
- 0000033C  48/ 89 41 10	     2					MOV				Q_PTR [ RCX ] [ 2 * 8 ], RAX
- 00000340  48/ 89 41 18	     2					MOV				Q_PTR [ RCX ] [ 3 * 8 ], RAX
- 00000344  48/ 89 41 20	     2					MOV				Q_PTR [ RCX ] [ 4 * 8 ], RAX
- 00000348  48/ 89 41 28	     2					MOV				Q_PTR [ RCX ] [ 5 * 8 ], RAX
- 0000034C  48/ 89 41 30	     2					MOV				Q_PTR [ RCX ] [ 6 * 8 ], RAX
- 00000350  48/ 89 41 38	     2					MOV				Q_PTR [ RCX ] [ 7 * 8 ], RAX
+ 0000033D  48/ 89 01	     2					MOV				Q_PTR [ RCX ] [ 0 * 8 ], RAX
+ 00000340  48/ 89 41 08	     2					MOV				Q_PTR [ RCX ] [ 1 * 8 ], RAX
+ 00000344  48/ 89 41 10	     2					MOV				Q_PTR [ RCX ] [ 2 * 8 ], RAX
+ 00000348  48/ 89 41 18	     2					MOV				Q_PTR [ RCX ] [ 3 * 8 ], RAX
+ 0000034C  48/ 89 41 20	     2					MOV				Q_PTR [ RCX ] [ 4 * 8 ], RAX
+ 00000350  48/ 89 41 28	     2					MOV				Q_PTR [ RCX ] [ 5 * 8 ], RAX
+ 00000354  48/ 89 41 30	     2					MOV				Q_PTR [ RCX ] [ 6 * 8 ], RAX
+ 00000358  48/ 89 41 38	     2					MOV				Q_PTR [ RCX ] [ 7 * 8 ], RAX
 			     1	
- 00000354  48/ 89 02						MOV				Q_PTR [ RDX ], RAX					; clear callers overflow
- 00000357  4C/ 8B D2		 				MOV				R10, RDX							; RDX (pointer to callers overflow) gets used in the MUL: save it in R10
+ 0000035C  48/ 89 02						MOV				Q_PTR [ RDX ], RAX					; clear callers overflow
+ 0000035F  4C/ 8B D2		 				MOV				R10, RDX							; RDX (pointer to callers overflow) gets used in the MUL: save it in R10
 
 				; FOR EACH index of 7 thru 1 (omiting 0): fetch (pop) qword of multiplicand, multiply, add 128 bit result (RAX, RDX) to running working product
 								FOR				idx, < 7, 6, 5, 4, 3, 2, 1 >		; Note: this is not a 'real' for, this is a macro that generates an unwound loop
@@ -1622,46 +1642,47 @@ ui512md.asm						     Page 1 - 1
 								ADD				Q_PTR [ RCX ] [ idx * 8 ], RAX		; add RAX to working product [ idx ] qword
 								ADC				Q_PTR [ RCX ] [ (idx - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
 								ENDM
- 0000035A  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
- 0000035B  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
- 0000035E  48/ 01 41 38	     1					ADD				Q_PTR [ RCX ] [ 7 * 8 ], RAX		; add RAX to working product [ idx ] qword
- 00000362  48/ 11 51 30	     1					ADC				Q_PTR [ RCX ] [ (7 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
- 00000366  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
- 00000367  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
- 0000036A  48/ 01 41 30	     1					ADD				Q_PTR [ RCX ] [ 6 * 8 ], RAX		; add RAX to working product [ idx ] qword
- 0000036E  48/ 11 51 28	     1					ADC				Q_PTR [ RCX ] [ (6 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
- 00000372  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
- 00000373  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
- 00000376  48/ 01 41 28	     1					ADD				Q_PTR [ RCX ] [ 5 * 8 ], RAX		; add RAX to working product [ idx ] qword
- 0000037A  48/ 11 51 20	     1					ADC				Q_PTR [ RCX ] [ (5 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
- 0000037E  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
- 0000037F  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
- 00000382  48/ 01 41 20	     1					ADD				Q_PTR [ RCX ] [ 4 * 8 ], RAX		; add RAX to working product [ idx ] qword
- 00000386  48/ 11 51 18	     1					ADC				Q_PTR [ RCX ] [ (4 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
- 0000038A  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
- 0000038B  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
- 0000038E  48/ 01 41 18	     1					ADD				Q_PTR [ RCX ] [ 3 * 8 ], RAX		; add RAX to working product [ idx ] qword
- 00000392  48/ 11 51 10	     1					ADC				Q_PTR [ RCX ] [ (3 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
- 00000396  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
- 00000397  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
- 0000039A  48/ 01 41 10	     1					ADD				Q_PTR [ RCX ] [ 2 * 8 ], RAX		; add RAX to working product [ idx ] qword
- 0000039E  48/ 11 51 08	     1					ADC				Q_PTR [ RCX ] [ (2 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
- 000003A2  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
- 000003A3  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
- 000003A6  48/ 01 41 08	     1					ADD				Q_PTR [ RCX ] [ 1 * 8 ], RAX		; add RAX to working product [ idx ] qword
- 000003AA  48/ 11 11	     1					ADC				Q_PTR [ RCX ] [ (1 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+ 00000362  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
+ 00000363  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000366  48/ 01 41 38	     1					ADD				Q_PTR [ RCX ] [ 7 * 8 ], RAX		; add RAX to working product [ idx ] qword
+ 0000036A  48/ 11 51 30	     1					ADC				Q_PTR [ RCX ] [ (7 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+ 0000036E  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
+ 0000036F  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000372  48/ 01 41 30	     1					ADD				Q_PTR [ RCX ] [ 6 * 8 ], RAX		; add RAX to working product [ idx ] qword
+ 00000376  48/ 11 51 28	     1					ADC				Q_PTR [ RCX ] [ (6 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+ 0000037A  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
+ 0000037B  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 0000037E  48/ 01 41 28	     1					ADD				Q_PTR [ RCX ] [ 5 * 8 ], RAX		; add RAX to working product [ idx ] qword
+ 00000382  48/ 11 51 20	     1					ADC				Q_PTR [ RCX ] [ (5 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+ 00000386  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
+ 00000387  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 0000038A  48/ 01 41 20	     1					ADD				Q_PTR [ RCX ] [ 4 * 8 ], RAX		; add RAX to working product [ idx ] qword
+ 0000038E  48/ 11 51 18	     1					ADC				Q_PTR [ RCX ] [ (4 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+ 00000392  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
+ 00000393  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 00000396  48/ 01 41 18	     1					ADD				Q_PTR [ RCX ] [ 3 * 8 ], RAX		; add RAX to working product [ idx ] qword
+ 0000039A  48/ 11 51 10	     1					ADC				Q_PTR [ RCX ] [ (3 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+ 0000039E  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
+ 0000039F  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 000003A2  48/ 01 41 10	     1					ADD				Q_PTR [ RCX ] [ 2 * 8 ], RAX		; add RAX to working product [ idx ] qword
+ 000003A6  48/ 11 51 08	     1					ADC				Q_PTR [ RCX ] [ (2 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
+ 000003AA  58		     1					POP				RAX									; multiplicand [ idx ] qword -> RAX
+ 000003AB  49/ F7 E1	     1					MUL				R9									; times multiplier -> RAX, RDX
+ 000003AE  48/ 01 41 08	     1					ADD				Q_PTR [ RCX ] [ 1 * 8 ], RAX		; add RAX to working product [ idx ] qword
+ 000003B2  48/ 11 11	     1					ADC				Q_PTR [ RCX ] [ (1 - 1) * 8 ], RDX	; and add RDX with carry to [ idx - 1 ] qword of working product
 
 				; Most significant (idx=0), the high order result of the multiply in RDX, goes to the overflow of the caller
- 000003AD  58							POP				RAX
- 000003AE  49/ F7 E1						MUL				R9
- 000003B1  48/ 01 01						ADD				Q_PTR [ RCX ] [ 0 * 8 ], RAX
- 000003B4  49/ 11 12						ADC				Q_PTR [ R10 ], RDX					; last qword overflow is also the operation overflow
- 000003B7  48/ 33 C0						XOR				RAX, RAX							; return zero
- 000003BA  C3							RET
+ 000003B5  58							POP				RAX
+ 000003B6  49/ F7 E1						MUL				R9
+ 000003B9  48/ 01 01						ADD				Q_PTR [ RCX ] [ 0 * 8 ], RAX
+ 000003BC  49/ 11 12						ADC				Q_PTR [ R10 ], RDX					; last qword overflow is also the operation overflow
+ 000003BF  48/ 33 C0						XOR				RAX, RAX							; return zero
+ 000003C2			@@exit:
+ 000003C2  C3							RET
 								
- 000003BB			mult_uT64		ENDP
+ 000003C3			mult_uT64		ENDP
 								Other_Exit		mult_uT64, ui512
- 000003BB		     1	ui512			ENDS
+ 000003C3		     1	ui512			ENDS
 
 				;
 				;--------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -1675,8 +1696,8 @@ ui512md.asm						     Page 1 - 1
 				;			returns			-	0 for success, -1 for attempt to divide by zero, (GP_Fault) for mis-aligned parameter address
 
 								Other_Entry		div_u, ui512
- 000003BB		     1	ui512			SEGMENT			PARA 'CODE'
- 000003BB  00000006 [	     1					DB				6 DUP (0cch)
+ 000003C3		     1	ui512			SEGMENT			PARA 'CODE'
+ 000003C3  00000006 [	     1					DB				6 DUP (0cch)
 	    CC
 	   ]
 			     1					ALIGN			16
@@ -1693,98 +1714,99 @@ ui512md.asm						     Page 1 - 1
  = padding2 + 64 - padding1	div_oset		EQU				padding2 + 64 - padding1
 
 								CreateFrame		360h, savedRBP
- 000003D0  55		   *	    push   rbp
- 000003D1  48/ 8B EC	   *	    mov    rbp, rsp
- 000003D4  48/ 81 C4
-	   FFFFFD00	   *	    add    rsp, 0FFFFFD00h
- 000003DB  55		     1					PUSH			RBP
- 000003DC  48/ 8B EC	     1					MOV				RBP, RSP
- 000003DF  48/ 83 E4 F8	     1					AND				RSP, -8
- 000003E3  48/ 81 EC	     1					SUB				RSP, 360h + 64					; make a gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
+ 000003D0  55		     1					PUSH			RBP
+ 000003D1  48/ 8B EC	     1					MOV				RBP, RSP
+ 000003D4  48/ 83 E4 F8	     1					AND				RSP, -8
+ 000003D8  48/ 81 EC	     1					SUB				RSP, 360h + 64					; make a gap between old stack pointer and current stack pointer for use as "LOCAL", adjust size if changes made to locals
 	   000003A0
- 000003EA  48/ C7 C0	     1					MOV				RAX, -64							; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
+ 000003DF  48/ C7 C0	     1					MOV				RAX, -64							; Round it (down), to make it, and local vars, align on 64 byte address (necessary for aligned ZMM load/store)
 	   FFFFFFC0
- 000003F1  48/ 23 C5	     1					AND				RAX, RBP							; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
- 000003F4  48/ 95	     1					XCHG			RAX, RBP							; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
- 000003F6  48/ 89 85	     1					MOV				savedRBP, RAX					; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
+ 000003E6  48/ 23 C5	     1					AND				RAX, RBP							; note: "padding" variables must not be used. They are in areas where we have just rounded down, or in stack space for those we call
+ 000003E9  48/ 95	     1					XCHG			RAX, RBP							; RBP now points to top of gap between old stack pointer and current stack pointer, aligned on 64
+ 000003EB  48/ 89 85	     1					MOV				savedRBP, RAX					; LOCAL variables now usable, using negative offsets from the new RBP value. Must restore RBP, RSP at exit (Use RELEASEFRAME)
 	   FFFFFDC0
- 000003FD  48/ 89 8D						MOV				savedRCX, RCX
+ 000003F2  48/ 89 8D						MOV				savedRCX, RCX
 	   FFFFFDF8
- 00000404  48/ 89 95						MOV				savedRDX, RDX
+ 000003F9  48/ 89 95						MOV				savedRDX, RDX
 	   FFFFFDF0
- 0000040B  4C/ 89 85						MOV				savedR8, R8
+ 00000400  4C/ 89 85						MOV				savedR8, R8
 	   FFFFFDE8
- 00000412  4C/ 89 8D						MOV				savedR9, R9
+ 00000407  4C/ 89 8D						MOV				savedR9, R9
 	   FFFFFDE0
- 00000419  4C/ 89 95						MOV				savedR10, R10
+ 0000040E  4C/ 89 95						MOV				savedR10, R10
 	   FFFFFDD8
- 00000420  4C/ 89 9D						MOV				savedR11, R11
+ 00000415  4C/ 89 9D						MOV				savedR11, R11
 	   FFFFFDD0
- 00000427  4C/ 89 A5						MOV				savedR12, R12
+ 0000041C  4C/ 89 A5						MOV				savedR12, R12
 	   FFFFFDC8
 
-								CheckAlign		RCX									; (out) Quotient
-			     1					LOCAL			ok
+								CheckAlign		RCX, cleanupwretcode				; (out) Quotient
 			     1		IF	__CheckAlign
- 0000042E  48/ F7 C1	     1					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000423  48/ F7 C1	     1					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000435  74 08	     1					JZ				@F									; Yes, passes test, continue
- 00000437  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 0000043D  C9		   *	    leave  
- 0000043E  C3		   *	    ret    00000h
- 0000043F		     1	@@:
+ 0000042A  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 0000042C  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<cleanupwretcode>
+ 00000432  E9 000003A6	     1					JMP				cleanupwretcode								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000437		     1	@@:
 			     1		ENDIF
-								CheckAlign		RDX									; (out) Remainder
-			     1					LOCAL			ok
+								CheckAlign		RDX, cleanupwretcode				; (out) Remainder
 			     1		IF	__CheckAlign
- 0000043F  48/ F7 C2	     1					TEST			RDX, 63							; Is specified param aligned 64?
+ 00000437  48/ F7 C2	     1					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000446  74 08	     1					JZ				@F									; Yes, passes test, continue
- 00000448  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 0000044E  C9		   *	    leave  
- 0000044F  C3		   *	    ret    00000h
- 00000450		     1	@@:
+ 0000043E  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 00000440  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<cleanupwretcode>
+ 00000446  E9 00000392	     1					JMP				cleanupwretcode								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 0000044B		     1	@@:
 			     1		ENDIF
-								CheckAlign		R8									; (in) Dividend
-			     1					LOCAL			ok
+								CheckAlign		R8, cleanupwretcode					; (in) Dividend
 			     1		IF	__CheckAlign
- 00000450  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
+ 0000044B  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
 	   0000003F
- 00000457  74 08	     1					JZ				@F									; Yes, passes test, continue
- 00000459  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 0000045F  C9		   *	    leave  
- 00000460  C3		   *	    ret    00000h
- 00000461		     1	@@:
+ 00000452  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 00000454  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<cleanupwretcode>
+ 0000045A  E9 0000037E	     1					JMP				cleanupwretcode								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 0000045F		     1	@@:
 			     1		ENDIF
-								CheckAlign		R9									; (in) Divisor
-			     1					LOCAL			ok
+								CheckAlign		R9, cleanupwretcode					; (in) Divisor
 			     1		IF	__CheckAlign
- 00000461  49/ F7 C1	     1					TEST			R9, 63							; Is specified param aligned 64?
+ 0000045F  49/ F7 C1	     1					TEST			R9, 63							; Is specified param aligned 64?
 	   0000003F
- 00000468  74 08	     1					JZ				@F									; Yes, passes test, continue
- 0000046A  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     1					RET													; Return to caller, with GPFault code in EAX
- 00000470  C9		   *	    leave  
- 00000471  C3		   *	    ret    00000h
- 00000472		     1	@@:
+ 00000466  74 0B	     1					JZ				@F									; Yes, passes test, continue
+ 00000468  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<cleanupwretcode>
+ 0000046E  E9 0000036A	     1					JMP				cleanupwretcode								; Return to caller, with GPFault code in EAX
+			     1			ELSE
+			     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000473		     1	@@:
 			     1		ENDIF
 
 				; Initialize
 								Zero512			RCX									; zero callers quotient
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000472  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000473  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000479  74 08	     2					JZ				@F									; Yes, passes test, continue
- 0000047B  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 00000481  C9		   *	    leave  
- 00000482  C3		   *	    ret    00000h
+ 0000047A  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 0000047C  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 00000482  CC		     2					INT				3									; No, fault
+			     2			ENDIF
  00000483		     2	@@:
 			     2		ENDIF
  00000483  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
@@ -1812,20 +1834,21 @@ ui512md.asm						     Page 1 - 1
 								Zero512			RDX									; zero callers remainder
 			     1		IF		__UseZ
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
  0000048F  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 00000496  74 08	     2					JZ				@F									; Yes, passes test, continue
+ 00000496  74 07	     2					JZ				@F									; Yes, passes test, continue
  00000498  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 0000049E  C9		   *	    leave  
- 0000049F  C3		   *	    ret    00000h
- 000004A0		     2	@@:
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000049E  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 0000049F		     2	@@:
 			     2		ENDIF
- 000004A0  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 0000049F  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 000004A6  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
+ 000004A5  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
 	   3A
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RDX
@@ -1845,25 +1868,26 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RDX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 000004AC  48/ 8D 8D						LEA				RCX, quotient
+ 000004AB  48/ 8D 8D						LEA				RCX, quotient
 	   FFFFFE40
 								Zero512			RCX									; zero working quotient
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000004B3  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 000004B2  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000004BA  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000004BC  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000004C2  C9		   *	    leave  
- 000004C3  C3		   *	    ret    00000h
- 000004C4		     2	@@:
+ 000004B9  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000004BB  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000004C1  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000004C2		     2	@@:
 			     2		ENDIF
- 000004C4  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 000004C2  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 000004CA  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 000004C8  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -1885,44 +1909,46 @@ ui512md.asm						     Page 1 - 1
 			     1		ENDIF
 
 				 ; Examine divisor
- 000004D0  49/ 8B C9						MOV				RCX, R9								; divisor
- 000004D3  E8 00000000 E					CALL			msb_u								; get most significant bit
- 000004D8  66| 83 F8 FF						CMP				AX, -1								; msb < 0? 
- 000004DC  0F 84 0000033E					JE				divbyzero							; divisor is zero, abort
- 000004E2  66| 83 F8 40						CMP				AX, 64								; divisor only one 64-bit word?
- 000004E6  7D 55						JGE				mbynDiv								; no, do divide of m digit by n digit
+ 000004CE  49/ 8B C9						MOV				RCX, R9								; divisor
+ 000004D1  E8 00000000 E					CALL			msb_u								; get most significant bit
+ 000004D6  66| 83 F8 00						CMP				AX, 0								; msb < 0? 
+ 000004DA  0F 8C 00000337					JL				divbyzero							; divisor is zero, abort
+ 000004E0  0F 84 0000033A					JE				divbyone							; divisor is one, exit with remainder = 0, quotient = dividend 
+ 000004E6  66| 83 F8 40						CMP				AX, 64								; divisor only one 64-bit word?
+ 000004EA  7D 54						JGE				mbynDiv								; no, do divide of m digit by n digit
 
 				;	divide of m 64-bit qwords by one 64 bit qword divisor, use the quicker divide routine (div_uT64), and return
- 000004E8  48/ 8B 8D						MOV				RCX, savedRCX						; set up parms for call to div by 64bit: RCX - addr of quotient
+ 000004EC  48/ 8B 8D						MOV				RCX, savedRCX						; set up parms for call to div by 64bit: RCX - addr of quotient
 	   FFFFFDF8
- 000004EF  48/ 8B 95						MOV				RDX, savedRDX						; RDX - addr of remainder
+ 000004F3  48/ 8B 95						MOV				RDX, savedRDX						; RDX - addr of remainder
 	   FFFFFDF0
- 000004F6  4C/ 8B 85						MOV				R8, savedR8							; R8 - addr of dividend
+ 000004FA  4C/ 8B 85						MOV				R8, savedR8							; R8 - addr of dividend
 	   FFFFFDE8
- 000004FD  48/ 8B 85						MOV				RAX, savedR9
+ 00000501  48/ 8B 85						MOV				RAX, savedR9
 	   FFFFFDE0
- 00000504  4C/ 8B 48 38						MOV				R9, Q_PTR [ RAX ] [ 7 * 8 ]			; R9 - value of 64 bit divisor
- 00000508  E8 00000393						CALL			div_uT64
- 0000050D  48/ 8B 95						MOV				RDX, savedRDX						; move 64 bit remainder to last word of 8 word remainder
+ 00000508  4C/ 8B 48 38						MOV				R9, Q_PTR [ RAX ] [ 7 * 8 ]			; R9 - value of 64 bit divisor
+ 0000050C  E8 000003DF						CALL			div_uT64
+ 00000511  48/ 8B 95						MOV				RDX, savedRDX						; move 64 bit remainder to last word of 8 word remainder
 	   FFFFFDF0
- 00000514  48/ 8B 0A						MOV				RCX, Q_PTR [ RDX ]					; get the one qword remainder
+ 00000518  48/ 8B 0A						MOV				RCX, Q_PTR [ RDX ]					; get the one qword remainder
 								Zero512			RDX									; clear the 8 qword callers remainder
 			     1		IF		__UseZ
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000517  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+ 0000051B  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 0000051E  74 08	     2					JZ				@F									; Yes, passes test, continue
- 00000520  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 00000526  C9		   *	    leave  
- 00000527  C3		   *	    ret    00000h
- 00000528		     2	@@:
+ 00000522  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000524  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000052A  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 0000052B		     2	@@:
 			     2		ENDIF
- 00000528  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 0000052B  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000052E  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
+ 00000531  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
 	   3A
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RDX
@@ -1942,8 +1968,8 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RDX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 00000534  48/ 89 4A 38						MOV				Q_PTR [ RDX ] [ 7 * 8 ], RCX		; put the one qword remainder in the least significant qword of the callers remainder
- 00000538  E9 000002A5						JMP				cleanupret
+ 00000537  48/ 89 4A 38						MOV				Q_PTR [ RDX ] [ 7 * 8 ], RCX		; put the one qword remainder in the least significant qword of the callers remainder
+ 0000053B  E9 0000029A						JMP				cleanupret
 
 				;
 				; Going to divide an 'm' digit dividend (u), by an 'n' digit divisor (v)
@@ -1958,27 +1984,26 @@ ui512md.asm						     Page 1 - 1
 				;	The remainder will need to be shifted (right) to "de-normalize" for the return value.
 				;	This process yields the dimensions of the variables: the number of qwords in each: 'm' for dividend, 'n' for divisor. Midx, and Nidx are the starting indexes, reflecting m and n.
 				;
- 0000053D			mbynDiv:
- 0000053D  66| 89 85						MOV				nDim, AX							; still have divisor msb in AX
+ 00000540			mbynDiv:
+ 00000540  66| 89 85						MOV				nDim, AX							; still have divisor msb in AX
 	   FFFFFD84
- 00000544  66| C1 AD						SHR				nDim, 6								; div msb by 64 to get msq (most significant qword) aka 'n' (zero based Nr qwords)
+ 00000547  66| C1 AD						SHR				nDim, 6								; div msb by 64 to get msq (most significant qword) aka 'n' (zero based Nr qwords)
 	   FFFFFD84 06
- 0000054C  66| B9 0007						MOV				CX, 7
- 00000550  66| 2B 8D						SUB				CX, nDim
+ 0000054F  66| B9 0007						MOV				CX, 7
+ 00000553  66| 2B 8D						SUB				CX, nDim
 	   FFFFFD84
- 00000557  66| FF 85						INC				nDim
-	   FFFFFD84
- 0000055E  66| 89 8D						MOV				nIdx, CX							; nIdx now 7 - msb of leading word: aka idx to first qword
+						;		INC				nDim
+ 0000055A  66| 89 8D						MOV				nIdx, CX							; nIdx now 7 - msb of leading word: aka idx to first qword
 	   FFFFFD88
 								;
- 00000565  66| 89 85						MOV				normf, AX
+ 00000561  66| 89 85						MOV				normf, AX
 	   FFFFFD8E
- 0000056C  66| 83 A5						AND				normf, 63
+ 00000568  66| 83 A5						AND				normf, 63
 	   FFFFFD8E 3F
- 00000574  66| B8 003F						MOV				AX, 63
- 00000578  66| 2B 85						SUB				AX, normf							; Nr bits to get leading divisor bit to msb saved at normf
+ 00000570  66| B8 003F						MOV				AX, 63
+ 00000574  66| 2B 85						SUB				AX, normf							; Nr bits to get leading divisor bit to msb saved at normf
 	   FFFFFD8E
- 0000057F  66| 89 85						MOV				normf, AX
+ 0000057B  66| 89 85						MOV				normf, AX
 	   FFFFFD8E
 																					
 				;	Notes: (continued from above) The mIdx and nIdx are indexes pointing the the leading non-zero qword in dividend and divisor respectively.
@@ -1986,40 +2011,41 @@ ui512md.asm						     Page 1 - 1
 
 				; Step D1: Normalize	
 								
- 00000586  48/ 8B 95						MOV				RDX, savedR9						; callers divisor
+ 00000582  48/ 8B 95						MOV				RDX, savedR9						; callers divisor
 	   FFFFFDE0
- 0000058D  48/ 8D 8D						LEA				RCX, normdivisor					; local copy of divisor, normalized
+ 00000589  48/ 8D 8D						LEA				RCX, normdivisor					; local copy of divisor, normalized
 	   FFFFFE00
- 00000594  66| 44/ 8B 85					MOV				R8W, normf
+ 00000590  66| 44/ 8B 85					MOV				R8W, normf
 	   FFFFFD8E
- 0000059C  E8 00000000 E					CALL			shl_u								; by shifting until MSB is high bit								
+ 00000598  E8 00000000 E					CALL			shl_u								; by shifting until MSB is high bit								
 								;
- 000005A1  48/ 8B 95						MOV				RDX, savedR8						; callers dividend
+ 0000059D  48/ 8B 95						MOV				RDX, savedR8						; callers dividend
 	   FFFFFDE8
- 000005A8  48/ 8D 8D						LEA				RCX, currnumerator [ 8 * 8 ]		; starting numerator is the normalized supplied dividend
+ 000005A4  48/ 8D 8D						LEA				RCX, currnumerator [ 8 * 8 ]		; starting numerator is the normalized supplied dividend
 	   FFFFFF40
- 000005AF  66| 44/ 8B 85					MOV				R8W, normf							; shifted the same Nr bits as it took to make divisor msb the leading bit
+ 000005AB  66| 44/ 8B 85					MOV				R8W, normf							; shifted the same Nr bits as it took to make divisor msb the leading bit
 	   FFFFFD8E
- 000005B7  E8 00000000 E					CALL			shl_u
- 000005BC  48/ 8D 95						LEA				RDX, currnumerator					; zero first eight words of working enumerator
+ 000005B3  E8 00000000 E					CALL			shl_u
+ 000005B8  48/ 8D 95						LEA				RDX, currnumerator					; zero first eight words of working enumerator
 	   FFFFFF00
 								Zero512			RDX
 			     1		IF		__UseZ
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000005C3  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+ 000005BF  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 000005CA  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000005CC  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000005D2  C9		   *	    leave  
- 000005D3  C3		   *	    ret    00000h
- 000005D4		     2	@@:
+ 000005C6  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000005C8  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000005CE  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000005CF		     2	@@:
 			     2		ENDIF
- 000005D4  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 000005CF  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 000005DA  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
+ 000005D5  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
 	   3A
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RDX
@@ -2039,84 +2065,85 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RDX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 000005E0  48/ 8B 95						MOV				RDX, savedR8
+ 000005DB  48/ 8B 95						MOV				RDX, savedR8
 	   FFFFFDE8
- 000005E7  48/ 8B 02						MOV				RAX, Q_PTR [ RDX ]					; if numerator has 8 qwords (dimM = 7), then the shift just lost us high order bits, get them			
- 000005EA  66| B9 003F						MOV				CX, 63								; shift first qword of dividend right 
- 000005EE  66| 2B 8D						SUB				CX, normf							; by 63 minus Nr bits shifted left
+ 000005E2  48/ 8B 02						MOV				RAX, Q_PTR [ RDX ]					; if numerator has 8 qwords (dimM = 7), then the shift just lost us high order bits, get them			
+ 000005E5  66| B9 003F						MOV				CX, 63								; shift first qword of dividend right 
+ 000005E9  66| 2B 8D						SUB				CX, normf							; by 63 minus Nr bits shifted left
 	   FFFFFD8E
- 000005F5  48/ D3 E8						SHR				RAX, CL								; eliminating all bit the bits we lost
- 000005F8  4C/ 8D A5						LEA				R12, currnumerator [ 7 * 8 ]
+ 000005F0  48/ D3 E8						SHR				RAX, CL								; eliminating all bit the bits we lost
+ 000005F3  4C/ 8D A5						LEA				R12, currnumerator [ 7 * 8 ]
 	   FFFFFF38
- 000005FF  49/ 89 04 24						MOV				[ R12 ], RAX						; store them at m + 1 (the word 'before' the other up to eight qwords)
+ 000005FA  49/ 89 04 24						MOV				[ R12 ], RAX						; store them at m + 1 (the word 'before' the other up to eight qwords)
 								;
- 00000603  48/ 33 C0						XOR				RAX, RAX
- 00000606  48/ C7 C1						MOV				RCX, -1
+ 000005FE  48/ 33 C0						XOR				RAX, RAX
+ 00000601  48/ C7 C1						MOV				RCX, -1
 	   FFFFFFFF
- 0000060D			@@:
- 0000060D  49/ 85 0C C4						TEST			Q_PTR [ R12 ] [ RAX * 8 ], RCX		; R12 currently has addr of beginning of enumerator, 
- 00000611  75 09						JNZ				@F
- 00000613  48/ FF C0						INC				RAX
- 00000616  48/ 83 F8 08						CMP				RAX, 8
- 0000061A  7E F1						JLE				@B
- 0000061C			@@:
- 0000061C  4D/ 8D 24 C4						LEA				R12, Q_PTR [ R12 ] [ RAX * 8 ]		; revise beginning address of working numerator with address of first non-zero qword
- 00000620  48/ 8D 0C 25						LEA				RCX, [ 9 ]
+ 00000608			@@:
+ 00000608  49/ 85 0C C4						TEST			Q_PTR [ R12 ] [ RAX * 8 ], RCX		; R12 currently has addr of beginning of enumerator, 
+ 0000060C  75 09						JNZ				@F
+ 0000060E  48/ FF C0						INC				RAX
+ 00000611  48/ 83 F8 08						CMP				RAX, 8
+ 00000615  7E F1						JLE				@B
+ 00000617			@@:
+ 00000617  4D/ 8D 24 C4						LEA				R12, Q_PTR [ R12 ] [ RAX * 8 ]		; revise beginning address of working numerator with address of first non-zero qword
+ 0000061B  48/ 8D 0C 25						LEA				RCX, [ 9 ]
 	   00000009
- 00000628  66| 2B C8						SUB				CX, AX
- 0000062B  66| 89 8D						MOV				mDim, CX
+ 00000623  66| 2B C8						SUB				CX, AX
+ 00000626  66| 89 8D						MOV				mDim, CX
 	   FFFFFD86
- 00000632  66| 89 85						MOV				mIdx, AX							; mIdx after normalize
+ 0000062D  66| 89 85						MOV				mIdx, AX							; mIdx after normalize
 	   FFFFFD8A
- 00000639  66| 89 85						MOV				jIdx, AX							; loop counter (Nr words in denominator)
+ 00000634  66| 89 85						MOV				jIdx, AX							; loop counter (Nr words in denominator)
 	   FFFFFD8C
- 00000640  66| 3B 8D						CMP				CX, nDim 
+ 0000063B  66| 3B 8D						CMP				CX, nDim 
 	   FFFFFD84
- 00000647  0F 8C 000001DC					JL				numtoremain							; if dimension M (dividend) is less than dimension N (divisor), exit with result zero
- 0000064D  48/ 0F B7 85						MOVZX			RAX, nIdx							; first word of divisor
+ 00000642  0F 8C 0000023A					JL				numtoremain							; if dimension M (dividend) is less than dimension N (divisor), exit with result zero
+ 00000648  48/ 0F B7 85						MOVZX			RAX, nIdx							; first word of divisor
 	   FFFFFD88
- 00000655  48/ 8B 84 C5						MOV				RAX, normdivisor [ RAX * 8 ]
+ 00000650  48/ 8B 84 C5						MOV				RAX, normdivisor [ RAX * 8 ]
 	   FFFFFE00
- 0000065D  48/ 89 85						MOV				nDiv, RAX							; save and re-use first qword of divisor (used each time to determine qhat)
+ 00000658  48/ 89 85						MOV				nDiv, RAX							; save and re-use first qword of divisor (used each time to determine qhat)
 	   FFFFFDA8
- 00000664  4C/ 8D A5						LEA				R12, currnumerator [ 7 * 8 ]
+ 0000065F  4C/ 8D A5						LEA				R12, currnumerator [ 7 * 8 ]
 	   FFFFFF38
 
-				;			Step D3: Calculate  q^
- 0000066B			D3:
- 0000066B  48/ 0F B7 8D						MOVZX			RCX, jIdx
+				; Step D3: Calculate  q^
+ 00000666			D3:
+ 00000666  48/ 0F B7 8D						MOVZX			RCX, jIdx
 	   FFFFFD8C
- 00000673  49/ 8B 14 CC						MOV				RDX, Q_PTR [ R12 ] [ RCX * 8 ]
- 00000677  48/ FF C1						INC				RCX
- 0000067A  49/ 8B 04 CC						MOV				RAX, Q_PTR [ R12 ] [ RCX * 8 ]
- 0000067E  48/ F7 B5						DIV				nDiv
+ 0000066E  49/ 8B 14 CC						MOV				RDX, Q_PTR [ R12 ] [ RCX * 8 ]
+ 00000672  48/ FF C1						INC				RCX
+ 00000675  49/ 8B 04 CC						MOV				RAX, Q_PTR [ R12 ] [ RCX * 8 ]
+ 00000679  48/ F7 B5						DIV				nDiv
 	   FFFFFDA8
- 00000685  48/ 89 85						MOV				qHat, RAX
+ 00000680  48/ 89 85						MOV				qHat, RAX
 	   FFFFFDB8
- 0000068C  48/ 89 95						MOV				rHat, RDX
+ 00000687  48/ 89 95						MOV				rHat, RDX
 	   FFFFFDB0
 
-				;			Step D4: Multiply trial quotient digit by full normalized divisor, then subtract from working copy of numerator (tricky alignment issues)
- 00000693			D4:
- 00000693  48/ 8D 8D						LEA				RCX, qdiv
+				; Step D4: Multiply trial quotient digit by full normalized divisor, then subtract from working copy of numerator (tricky alignment issues)
+ 0000068E			D4:
+ 0000068E  48/ 8D 8D						LEA				RCX, qdiv
 	   FFFFFE80
 								Zero512			RCX
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 0000069A  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000695  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000006A1  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000006A3  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000006A9  C9		   *	    leave  
- 000006AA  C3		   *	    ret    00000h
- 000006AB		     2	@@:
+ 0000069C  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 0000069E  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000006A4  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000006A5		     2	@@:
 			     2		ENDIF
- 000006AB  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 000006A5  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 000006B1  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 000006AB  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -2136,130 +2163,132 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 000006B7  48/ 8D 8D						LEA				RCX, qdiv [ 8 * 8 ]					; qdiv is 16 qwords. Last eight are answer
+ 000006B1  48/ 8D 8D						LEA				RCX, qdiv [ 8 * 8 ]					; qdiv is 16 qwords. Last eight are answer
 	   FFFFFEC0
- 000006BE  48/ 8D 95						LEA				RDX, qdiv [ 7 * 8 ]					; Nr 7 will be overflow (if any)
+ 000006B8  48/ 8D 95						LEA				RDX, qdiv [ 7 * 8 ]					; Nr 7 will be overflow (if any)
 	   FFFFFEB8
- 000006C5  4C/ 8D 85						LEA				R8, normdivisor						; the normalized 8 qword divisor
+ 000006BF  4C/ 8D 85						LEA				R8, normdivisor						; the normalized 8 qword divisor
 	   FFFFFE00
- 000006CC  4C/ 8B 8D						MOV				R9, qHat							; times qhat
+ 000006C6  4C/ 8B 8D						MOV				R9, qHat							; times qhat
 	   FFFFFDB8
- 000006D3  E8 FFFFFC18						CALL			mult_uT64							; multiply divisor by trial quotient digit (qHat)
+ 000006CD  E8 FFFFFC1E						CALL			mult_uT64							; multiply divisor by trial quotient digit (qHat)
 
-						; a little intricate here: 	Need the starting address of the two operands, the shorter of the two (remaining) lengths
-						; explaining the intricacies: the leading digit of the multiplied number needs to line up with the leading digit of the enumerator @ [ R12 ]
-						; the multiply may have added a digit (a qword). The added digit may be in the answer, or may be in the overflow
-						; subtract the result of the multiply from the remaining (current) numerator
+				; a little intricate here: 	Need the starting address of the two operands, the shorter of the two (remaining) lengths
+				; explaining the intricacies: the leading digit of the multiplied number needs to line up with the leading digit of the enumerator @ [ R12 ]
+				; the multiply may have added a digit (a qword). The added digit may be in the answer, or may be in the overflow
+				; subtract the result of the multiply from the remaining (current) numerator
 
 				; Calculate length of subtraction (sublen)
- 000006D8  0F B7 85						MOVZX			EAX, nDim				; number of words in divisor
+ 000006D2  0F B7 85						MOVZX			EAX, nDim							; number of words in divisor
 	   FFFFFD84
- 000006DF  0F B7 8D						MOVZX		    ECX, mDim
+ 000006D9  0F B7 8D						MOVZX		    ECX, mDim
 	   FFFFFD86
- 000006E6  66| 2B 8D						SUB				CX, jIdx				; remaining words in numerator
+ 000006E0  66| 2B 8D						SUB				CX, jIdx							; remaining words in numerator
 	   FFFFFD8C
- 000006ED  48/ 3B C1						CMP				RAX, RCX
- 000006F0  48/ 0F 4F C1						CMOVG			RAX, RCX				; sublen = min(nDim, mDim - jIdx)
- 000006F4  4C/ 8B C0						MOV				R8, RAX					; R8 = sublen
- 000006F7  48/ 89 85						MOV				sublen, RAX	
+ 000006E7  48/ 3B C1						CMP				RAX, RCX
+ 000006EA  48/ 0F 4F C1						CMOVG			RAX, RCX							; sublen = min(nDim, mDim - jIdx)
+ 000006EE  4C/ 8B C0						MOV				R8, RAX								; R8 = sublen
+ 000006F1  48/ 89 85						MOV				sublen, RAX	
 	   FFFFFDA0
 
 				; Set up pointers for subtraction
- 000006FE  48/ 8D 04 25						LEA				RAX, [ 8 ]							; RAX = 8
+ 000006F8  48/ 8D 04 25						LEA				RAX, [ 8 ]							; RAX = 8
 	   00000008
- 00000706  49/ 2B C0						SUB				RAX, R8						
- 00000709  48/ 8D 8C C5						LEA			    RCX, qdiv [ RAX * 8 ]           ; RCX = start of relevant qdiv
+ 00000700  49/ 2B C0						SUB				RAX, R8						
+ 00000703  48/ 8D 8C C5						LEA			    RCX, qdiv [ RAX * 8 ]				; RCX = start of relevant qdiv
 	   FFFFFE80
- 00000711  48/ 0F B7 85						MOVZX			RAX, jIdx
+ 0000070B  48/ 0F B7 85						MOVZX			RAX, jIdx
 	   FFFFFD8C
- 00000719  4A/ 8D 44 00						LEA				RAX, [ RAX ][ R8 ] -1
+ 00000713  4A/ 8D 44 00						LEA				RAX, [ RAX ][ R8 ] -1
 	   FF
- 0000071E  48/ 8D 94 C5						LEA			    RDX, currnumerator [ RAX * 8 ] ; RDX = start of relevant currnumerator
+ 00000718  48/ 8D 94 C5						LEA			    RDX, currnumerator [ RAX * 8 ]		; RDX = start of relevant currnumerator
 	   FFFFFF00
 
 				; Save for possible add-back
- 00000726  48/ 89 95						MOV				addbackRDX, RDX
+ 00000720  48/ 89 95						MOV				addbackRDX, RDX
 	   FFFFFD98
- 0000072D  48/ 89 8D						MOV			    addbackR11, RCX
+ 00000727  48/ 89 8D						MOV			    addbackR11, RCX
 	   FFFFFD90
 
 				; Call subtraction subroutine
- 00000734  E8 00000131						CALL    @sub
+ 0000072E  E8 0000018E						CALL    @sub
 
-				;			Step D5: Test remainder
- 00000739			D5:
- 00000739  48/ 0F B7 85						MOVZX			RAX, jIdx
+				; Step D5: Test remainder
+ 00000733			D5:
+ 00000733  48/ 0F B7 85						MOVZX			RAX, jIdx
 	   FFFFFD8C
- 00000741  48/ 8B 8D						MOV				RCX, qHat
+ 0000073B  48/ 8B 8D						MOV				RCX, qHat
 	   FFFFFDB8
- 00000748  48/ 89 8C C5						MOV				quotient [ RAX * 8 ], RCX			; Set quotient digit [ j ] 
+ 00000742  48/ 89 8C C5						MOV				quotient [ RAX * 8 ], RCX			; Set quotient digit [ j ] 
 	   FFFFFE40
- 00000750  73 24						JNC				D7									; Carry (from above) indicates result of subtract went negative, need D6 add back, else on to D7
+ 0000074A  73 24						JNC				D7									; Carry (from above) indicates result of subtract went negative, need D6 add back, else on to D7
 
-				;			Step D6: Add Back
- 00000752			D6:
- 00000752  48/ FF 8C C5						DEC				quotient [ RAX * 8 ]				; adjust quotient digit
+				; Step D6: Add Back
+ 0000074C			D6:
+ 0000074C  48/ FF 8C C5						DEC				quotient [ RAX * 8 ]				; adjust quotient digit
 	   FFFFFE40
- 0000075A  4C/ 8B 85						MOV				R8, sublen
+ 00000754  4C/ 8B 85						MOV				R8, sublen
 	   FFFFFDA0
- 00000761  48/ 8B 8D						MOV				RCX, addbackR11
+ 0000075B  48/ 8B 8D						MOV				RCX, addbackR11
 	   FFFFFD90
- 00000768  48/ 8B 95						MOV				RDX, addbackRDX
+ 00000762  48/ 8B 95						MOV				RDX, addbackRDX
 	   FFFFFD98
- 0000076F  E8 0000010B						CALL			@addback
- 00000774  EB 00						JMP				 D7
+ 00000769  E8 00000167						CALL			@addback
+ 0000076E  EB 00						JMP				 D7
 
-				;			Step D7: Loop on j
- 00000776			D7:
- 00000776  66| FF 85						INC				jIdx								; increase loop counter
+				; Step D7: Loop on j
+ 00000770			D7:
+ 00000770  66| FF 85						INC				jIdx								; increase loop counter
 	   FFFFFD8C
- 0000077D  66| 83 BD						CMP				jIdx, 8								; done?
+ 00000777  66| 83 BD						CMP				jIdx, 8								; done?
 	   FFFFFD8C 08
- 00000785  0F 8E FFFFFEE0					JLE				D3									; no, loop to D3
+ 0000077F  0F 8E FFFFFEE1					JLE				D3									; no, loop to D3
 
-				;			Step D8: Un Normalize:
- 0000078B			D8UnNormalize:
- 0000078B  48/ 8B 8D						MOV				RCX, savedRDX						; reduced working numerator is now the remainder
+				; Step D8: Un Normalize:
+ 00000785			D8UnNormalize:
+ 00000785  48/ 8B 8D						MOV				RCX, savedRDX						; reduced working numerator is now the remainder
 	   FFFFFDF0
- 00000792  48/ 8D 95						LEA				RDX, currnumerator [ 8 * 8 ]		; shifted result to callers remainder
+ 0000078C  48/ 8D 95						LEA				RDX, currnumerator [ 8 * 8 ]		; shifted result to callers remainder
 	   FFFFFF40
- 00000799  66| 44/ 8B 85					MOV				R8W, normf
+ 00000793  66| 44/ 8B 85					MOV				R8W, normf
 	   FFFFFD8E
- 000007A1  E8 00000000 E					CALL			shr_u
+ 0000079B  E8 00000000 E					CALL			shr_u
 								;
- 000007A6  48/ 8B 8D						MOV				RCX, savedRCX						; copy working quotient to callers quotient
+ 000007A0  48/ 8B 8D						MOV				RCX, savedRCX						; copy working quotient to callers quotient
 	   FFFFFDF8
- 000007AD  48/ 8D 95						LEA				RDX, quotient
+ 000007A7  48/ 8D 95						LEA				RDX, quotient
 	   FFFFFE40
 								Copy512			RCX, RDX
 			     1		IF		__UseZ 
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000007B4  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 000007AE  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000007BB  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000007BD  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000007C3  C9		   *	    leave  
- 000007C4  C3		   *	    ret    00000h
- 000007C5		     2	@@:
+ 000007B5  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000007B7  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000007BD  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000007BE		     2	@@:
 			     2		ENDIF
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 000007C5  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+ 000007BE  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 000007CC  74 08	     2					JZ				@F									; Yes, passes test, continue
- 000007CE  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 000007D4  C9		   *	    leave  
- 000007D5  C3		   *	    ret    00000h
- 000007D6		     2	@@:
+ 000007C5  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000007C7  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000007CD  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000007CE		     2	@@:
 			     2		ENDIF
- 000007D6  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
+ 000007CE  62 61 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ RDX ]
 	   3A
- 000007DC  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 000007D4  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -2285,68 +2314,171 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 000007E2			cleanupret:
- 000007E2  48/ 33 C0						XOR				RAX, RAX							; return zero
- 000007E5			cleanupwretcode:
- 000007E5  4C/ 8B A5						MOV				R12, savedR12
+ 000007DA			cleanupret:
+ 000007DA  48/ 33 C0						XOR				RAX, RAX							; return zero
+ 000007DD			cleanupwretcode:
+ 000007DD  4C/ 8B A5						MOV				R12, savedR12
 	   FFFFFDC8
- 000007EC  4C/ 8B 9D						MOV				R11, savedR11
+ 000007E4  4C/ 8B 9D						MOV				R11, savedR11
 	   FFFFFDD0
- 000007F3  4C/ 8B 95						MOV				R10, savedR10
+ 000007EB  4C/ 8B 95						MOV				R10, savedR10
 	   FFFFFDD8
- 000007FA  4C/ 8B 8D						MOV				R9,  savedR9
+ 000007F2  4C/ 8B 8D						MOV				R9,  savedR9
 	   FFFFFDE0
- 00000801  4C/ 8B 85						MOV				R8,  savedR8
+ 000007F9  4C/ 8B 85						MOV				R8,  savedR8
 	   FFFFFDE8
- 00000808  48/ 8B 95						MOV				RDX, savedRDX
+ 00000800  48/ 8B 95						MOV				RDX, savedRDX
 	   FFFFFDF0
- 0000080F  48/ 8B 8D						MOV				RCX, savedRCX						; restore parameter registers back to "as-called" values
+ 00000807  48/ 8B 8D						MOV				RCX, savedRCX						; restore parameter registers back to "as-called" values
 	   FFFFFDF8
 								ReleaseFrame	savedRBP
- 00000816  48/ 8B A5	     1					MOV				RSP, savedRBP					; restore unadjusted / unrounded (the as when called) stack pointer (eliminating LOCAL storage) 
+ 0000080E  48/ 8B A5	     1					MOV				RSP, savedRBP					; restore unadjusted / unrounded (the as when called) stack pointer (eliminating LOCAL storage) 
 	   FFFFFDC0
- 0000081D  5D		     1					POP				RBP									; restore base pointer for caller
+ 00000815  5D		     1					POP				RBP									; restore base pointer for caller
 								RET
- 0000081E  C9		   *	    leave  
- 0000081F  C3		   *	    ret    00000h
- 00000820			divbyzero:
- 00000820  8D 04 25						LEA				EAX, [ retcode_neg_one ]
+ 00000816  C3		   *	    ret    00000h
+ 00000817			divbyzero:
+ 00000817  8D 04 25						LEA				EAX, [ retcode_neg_one ]
 	   FFFFFFFF
- 00000827  EB BC						JMP				cleanupwretcode
+ 0000081E  EB BD						JMP				cleanupwretcode
 
- 00000829  4C/ 8B 85		numtoremain:	MOV				R8, savedR8
+ 00000820			divbyone:
+ 00000820  48/ 8B 8D						MOV				RCX, savedRCX						; callers quotient
+	   FFFFFDF8
+ 00000827  4C/ 8B 85						MOV				R8,  savedR8						; callers dividend
 	   FFFFFDE8
- 00000830  48/ 8B 95						MOV				RDX, savedRDX
+								Copy512			RCX, R8								; copy dividend to quotient
+			     1		IF		__UseZ 
+			     1					CheckAlign		RCX
+			     2		IF	__CheckAlign
+ 0000082E  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+	   0000003F
+ 00000835  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000837  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000083D  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 0000083E		     2	@@:
+			     2		ENDIF
+			     1					CheckAlign		R8
+			     2		IF	__CheckAlign
+ 0000083E  49/ F7 C0	     2					TEST			R8, 63							; Is specified param aligned 64?
+	   0000003F
+ 00000845  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000847  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000084D  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 0000084E		     2	@@:
+			     2		ENDIF
+ 0000084E  62 41 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ R8 ]
+	   38
+ 00000854  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+	   39
+			     1		ELSEIF	__UseY
+			     1					CheckAlign		RCX
+			     1					CheckAlign		R8
+			     1					VMOVDQA64		YMM4, YM_PTR [ R8 + 0 * 8 ]
+			     1					VMOVDQA64		YM_PTR [ RCX ] [ 0 * 8 ], YMM4	; alternate ymm regs in case pipeline can execute next without waiting for this.
+			     1					VMOVDQA64		YMM5, YM_PTR [ R8 ] [ 4 * 8 ]
+			     1					VMOVDQA64		YM_PTR [ RCX ] [ 4 * 8 ], YMM5
+			     1		ELSEIF	__UseX
+			     1					CheckAlign		RCX
+			     1					CheckAlign		R8
+			     1					MOVDQA			XMM4, XM_PTR [ R8 ] [ 0 * 8 ]
+			     1					MOVDQA			XM_PTR [ RCX ] [ 0 * 8 ], XMM4
+			     1					MOVDQA			XMM3, XM_PTR [ R8 ] [ 2 * 8 ]
+			     1					MOVDQA			XM_PTR [ RCX ] [ 2 * 8 ], XMM3
+			     1					MOVDQA			XMM4, XM_PTR [ R8 ] [ 4 * 8 ]
+			     1					MOVDQA			XM_PTR [ RCX ] [ 4 * 8 ], XMM4
+			     1					MOVDQA			XMM3, XM_PTR [ R8 ] [ 6 * 8 ]
+			     1					MOVDQA			XM_PTR [ RCX ] [ 6 * 8 ], XMM3
+			     1		ELSE
+			     1					FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
+			     1					MOV				RAX, Q_PTR [ R8 ] [ idx * 8 ]
+			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
+			     1					ENDM
+			     1		ENDIF
+ 0000085A  48/ 8B 95						MOV				RDX, savedRDX						; callers remainder	
+	   FFFFFDF0
+								Zero512			RDX									; remainder is zero
+			     1		IF		__UseZ
+			     1					CheckAlign		RDX
+			     2		IF	__CheckAlign
+ 00000861  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+	   0000003F
+ 00000868  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 0000086A  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 00000870  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 00000871		     2	@@:
+			     2		ENDIF
+ 00000871  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+	   FF
+ 00000877  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
+	   3A
+			     1		ELSEIF	__UseY
+			     1					CheckAlign		RDX
+			     1					VPXORQ			YMM4, YMM4, YMM4
+			     1					FOR				idx, < 0, 4 >
+			     1					VMOVDQA64		YM_PTR [ RDX ] [ idx * 8 ], YMM4
+			     1					ENDM
+			     1		ELSEIF	__UseX
+			     1					CheckAlign		RDX
+			     1					PXOR			XMM4, XMM4
+			     1					FOR				idx, < 0, 2, 4, 6 >
+			     1					MOVDQA			XM_PTR [ RDX ] [ idx * 8 ], XMM4
+			     1					ENDM		
+			     1		ELSE
+			     1					XOR				RAX, RAX
+			     1					FOR				idx,  < 0, 1, 2, 3, 4, 5, 6, 7 >
+			     1					MOV				Q_PTR [ RDX ] [ idx * 8 ], RAX
+			     1					ENDM
+			     1		ENDIF
+ 0000087D  E9 FFFFFF58						JMP				cleanupret
+
+ 00000882  4C/ 8B 85		numtoremain:	MOV				R8, savedR8							; callers dividend
+	   FFFFFDE8
+ 00000889  48/ 8B 95						MOV				RDX, savedRDX						; callers remainder
 	   FFFFFDF0
 								Copy512			RDX, R8
 			     1		IF		__UseZ 
 			     1					CheckAlign		RDX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000837  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
+ 00000890  48/ F7 C2	     2					TEST			RDX, 63							; Is specified param aligned 64?
 	   0000003F
- 0000083E  74 08	     2					JZ				@F									; Yes, passes test, continue
- 00000840  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 00000846  C9		   *	    leave  
- 00000847  C3		   *	    ret    00000h
- 00000848		     2	@@:
+ 00000897  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000899  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 0000089F  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000008A0		     2	@@:
 			     2		ENDIF
 			     1					CheckAlign		R8
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000848  49/ F7 C0	     2					TEST			R8, 63							; Is specified param aligned 64?
+ 000008A0  49/ F7 C0	     2					TEST			R8, 63							; Is specified param aligned 64?
 	   0000003F
- 0000084F  74 08	     2					JZ				@F									; Yes, passes test, continue
- 00000851  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
-			     2					RET													; Return to caller, with GPFault code in EAX
- 00000857  C9		   *	    leave  
- 00000858  C3		   *	    ret    00000h
- 00000859		     2	@@:
+ 000008A7  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 000008A9  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 000008AF  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 000008B0		     2	@@:
 			     2		ENDIF
- 00000859  62 41 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ R8 ]
+ 000008B0  62 41 FD 48/ 6F   1					VMOVDQA64		ZMM31, ZM_PTR [ R8 ]
 	   38
- 0000085F  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
+ 000008B6  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RDX ], ZMM31
 	   3A
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RDX
@@ -2372,34 +2504,32 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RDX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 00000865  E9 FFFFFF78						JMP				cleanupret
+ 000008BC  E9 FFFFFF19						JMP				cleanupret
 				; subroutine (called) to subtract n digits at [RCX] from [RDX] count of digits in R8
- 0000086A  F8			@sub:			CLC
- 0000086B  4D/ 85 C0		@@:				TEST			R8,  R8
- 0000086E  74 0D						JZ				@e1
- 00000870  4A/ 8B 04 C1						MOV				RAX, Q_PTR [ RCX ] [ R8 * 8 ]
- 00000874  4A/ 19 04 C2						SBB				Q_PTR [ RDX ] [ R8 * 8 ], RAX
- 00000878  49/ FF C8						DEC				R8
- 0000087B  EB EE						JMP				@B
- 0000087D			@e1:			RET
- 0000087D  C9		   *	    leave  
- 0000087E  C3		   *	    ret    00000h
+ 000008C1  F8			@sub:			CLC
+ 000008C2  4D/ 85 C0		@@:				TEST			R8,  R8
+ 000008C5  74 0D						JZ				@e1
+ 000008C7  4A/ 8B 04 C1						MOV				RAX, Q_PTR [ RCX ] [ R8 * 8 ]
+ 000008CB  4A/ 19 04 C2						SBB				Q_PTR [ RDX ] [ R8 * 8 ], RAX
+ 000008CF  49/ FF C8						DEC				R8
+ 000008D2  EB EE						JMP				@B
+ 000008D4			@e1:			RET
+ 000008D4  C3		   *	    ret    00000h
 
 				; subroutine (called) to add (back) n digits at [RCX] to [RDX] count of digits in R8
- 0000087F  F8			@addback:		CLC
- 00000880  4D/ 85 C0		@@:				TEST			R8, R8
- 00000883  74 0D						JZ				@e2
- 00000885  4A/ 8B 04 C1						MOV				RAX, Q_PTR [ RCX ] [ R8 * 8 ]
- 00000889  4A/ 11 04 C2						ADC				Q_PTR [ RDX ] [ R8 * 8 ], RAX
- 0000088D  49/ FF C8						DEC				R8
- 00000890  EB EE						JMP				@B
- 00000892			@e2:			RET
- 00000892  C9		   *	    leave  
- 00000893  C3		   *	    ret    00000h
+ 000008D5  F8			@addback:		CLC
+ 000008D6  4D/ 85 C0		@@:				TEST			R8, R8
+ 000008D9  74 0D						JZ				@e2
+ 000008DB  4A/ 8B 04 C1						MOV				RAX, Q_PTR [ RCX ] [ R8 * 8 ]
+ 000008DF  4A/ 11 04 C2						ADC				Q_PTR [ RDX ] [ R8 * 8 ], RAX
+ 000008E3  49/ FF C8						DEC				R8
+ 000008E6  EB EE						JMP				@B
+ 000008E8			@e2:			RET
+ 000008E8  C3		   *	    ret    00000h
 
- 00000894			div_u			ENDP
+ 000008E9			div_u			ENDP
 								Other_Exit		div_u, ui512
- 00000894		     1	ui512			ENDS
+ 000008E9		     1	ui512			ENDS
 
 
 				;
@@ -2416,40 +2546,46 @@ ui512md.asm						     Page 1 - 1
 				;			Regs with contents destroyed, not restored: RAX, RDX, R10 (each considered volitile, but caller might optimize on other regs)
 
 								Other_Entry		div_uT64, ui512
- 00000894		     1	ui512			SEGMENT			PARA 'CODE'
- 00000894  00000006 [	     1					DB				6 DUP (0cch)
+ 000008E9		     1	ui512			SEGMENT			PARA 'CODE'
+ 000008E9  00000006 [	     1					DB				6 DUP (0cch)
 	    CC
 	   ]
 			     1					ALIGN			16
- 000008A0			div_uT64		PROC			PUBLIC
+ 000008F0			div_uT64		PROC			PUBLIC
 								CheckAlign		RCX									; (out) Quotient
-			     1					LOCAL			ok
 			     1		IF	__CheckAlign
- 000008A0  48/ F7 C1	     1					TEST			RCX, 63							; Is specified param aligned 64?
+ 000008F0  48/ F7 C1	     1					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 000008A7  74 07	     1					JZ				@F									; Yes, passes test, continue
- 000008A9  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
- 000008AF  C3		     1					RET													; Return to caller, with GPFault code in EAX
- 000008B0		     1	@@:
+ 000008F7  74 07	     1					JZ				@F									; Yes, passes test, continue
+ 000008F9  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<>
+			     1					JMP												; Return to caller, with GPFault code in EAX
+			     1			ELSE
+ 000008FF  CC		     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000900		     1	@@:
 			     1		ENDIF
 								CheckAlign		R8									; (in) Dividend
-			     1					LOCAL			ok
 			     1		IF	__CheckAlign
- 000008B0  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
+ 00000900  49/ F7 C0	     1					TEST			R8, 63							; Is specified param aligned 64?
 	   0000003F
- 000008B7  74 07	     1					JZ				@F									; Yes, passes test, continue
- 000008B9  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
- 000008BF  C3		     1					RET													; Return to caller, with GPFault code in EAX
- 000008C0		     1	@@:
+ 00000907  74 07	     1					JZ				@F									; Yes, passes test, continue
+ 00000909  8B 05 00000054 R  1					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     1			IFNB	<>
+			     1					JMP												; Return to caller, with GPFault code in EAX
+			     1			ELSE
+ 0000090F  CC		     1					INT				3									; No, fault
+			     1			ENDIF
+ 00000910		     1	@@:
 			     1		ENDIF
 
 				; Test divisor for divide by zero				
- 000008C0  4D/ 85 C9						TEST			R9, R9
- 000008C3  74 63						JZ				@@DivByZero
+ 00000910  4D/ 85 C9						TEST			R9, R9
+ 00000913  74 63						JZ				@@DivByZero
 
 				; DIV instruction (64-bit) uses RAX and RDX. Need to move RDX (addr of remainder) out of the way; start it off with zero
- 000008C5  4C/ 8D 12						LEA				R10,  [ RDX ]						; save addr of callers remainder
- 000008C8  48/ 33 D2						XOR				RDX, RDX
+ 00000915  4C/ 8D 12						LEA				R10,  [ RDX ]						; save addr of callers remainder
+ 00000918  48/ 33 D2						XOR				RDX, RDX
 
 				; FOR EACH index of 0 thru 7: get qword of dividend, divide by divisor, store qword of quotient
 								FOR				idx, < 0, 1, 2, 3, 4, 5, 6, 7 >
@@ -2457,54 +2593,57 @@ ui512md.asm						     Page 1 - 1
 								DIV				R9									; divide by divisor in R9 (as passed)
 								MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
 								ENDM
- 000008CB  49/ 8B 00	     1					MOV				RAX, Q_PTR [ R8 ] [ 0 * 8 ]		; dividend [ idx ] -> RAX
- 000008CE  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 000008D1  48/ 89 01	     1					MOV				Q_PTR [ RCX ] [ 0 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
- 000008D4  49/ 8B 40 08	     1					MOV				RAX, Q_PTR [ R8 ] [ 1 * 8 ]		; dividend [ idx ] -> RAX
- 000008D8  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 000008DB  48/ 89 41 08	     1					MOV				Q_PTR [ RCX ] [ 1 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
- 000008DF  49/ 8B 40 10	     1					MOV				RAX, Q_PTR [ R8 ] [ 2 * 8 ]		; dividend [ idx ] -> RAX
- 000008E3  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 000008E6  48/ 89 41 10	     1					MOV				Q_PTR [ RCX ] [ 2 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
- 000008EA  49/ 8B 40 18	     1					MOV				RAX, Q_PTR [ R8 ] [ 3 * 8 ]		; dividend [ idx ] -> RAX
- 000008EE  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 000008F1  48/ 89 41 18	     1					MOV				Q_PTR [ RCX ] [ 3 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
- 000008F5  49/ 8B 40 20	     1					MOV				RAX, Q_PTR [ R8 ] [ 4 * 8 ]		; dividend [ idx ] -> RAX
- 000008F9  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 000008FC  48/ 89 41 20	     1					MOV				Q_PTR [ RCX ] [ 4 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
- 00000900  49/ 8B 40 28	     1					MOV				RAX, Q_PTR [ R8 ] [ 5 * 8 ]		; dividend [ idx ] -> RAX
- 00000904  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 00000907  48/ 89 41 28	     1					MOV				Q_PTR [ RCX ] [ 5 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
- 0000090B  49/ 8B 40 30	     1					MOV				RAX, Q_PTR [ R8 ] [ 6 * 8 ]		; dividend [ idx ] -> RAX
- 0000090F  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 00000912  48/ 89 41 30	     1					MOV				Q_PTR [ RCX ] [ 6 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
- 00000916  49/ 8B 40 38	     1					MOV				RAX, Q_PTR [ R8 ] [ 7 * 8 ]		; dividend [ idx ] -> RAX
- 0000091A  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
- 0000091D  48/ 89 41 38	     1					MOV				Q_PTR [ RCX ] [ 7 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 0000091B  49/ 8B 00	     1					MOV				RAX, Q_PTR [ R8 ] [ 0 * 8 ]		; dividend [ idx ] -> RAX
+ 0000091E  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 00000921  48/ 89 01	     1					MOV				Q_PTR [ RCX ] [ 0 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 00000924  49/ 8B 40 08	     1					MOV				RAX, Q_PTR [ R8 ] [ 1 * 8 ]		; dividend [ idx ] -> RAX
+ 00000928  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 0000092B  48/ 89 41 08	     1					MOV				Q_PTR [ RCX ] [ 1 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 0000092F  49/ 8B 40 10	     1					MOV				RAX, Q_PTR [ R8 ] [ 2 * 8 ]		; dividend [ idx ] -> RAX
+ 00000933  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 00000936  48/ 89 41 10	     1					MOV				Q_PTR [ RCX ] [ 2 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 0000093A  49/ 8B 40 18	     1					MOV				RAX, Q_PTR [ R8 ] [ 3 * 8 ]		; dividend [ idx ] -> RAX
+ 0000093E  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 00000941  48/ 89 41 18	     1					MOV				Q_PTR [ RCX ] [ 3 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 00000945  49/ 8B 40 20	     1					MOV				RAX, Q_PTR [ R8 ] [ 4 * 8 ]		; dividend [ idx ] -> RAX
+ 00000949  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 0000094C  48/ 89 41 20	     1					MOV				Q_PTR [ RCX ] [ 4 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 00000950  49/ 8B 40 28	     1					MOV				RAX, Q_PTR [ R8 ] [ 5 * 8 ]		; dividend [ idx ] -> RAX
+ 00000954  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 00000957  48/ 89 41 28	     1					MOV				Q_PTR [ RCX ] [ 5 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 0000095B  49/ 8B 40 30	     1					MOV				RAX, Q_PTR [ R8 ] [ 6 * 8 ]		; dividend [ idx ] -> RAX
+ 0000095F  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 00000962  48/ 89 41 30	     1					MOV				Q_PTR [ RCX ] [ 6 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
+ 00000966  49/ 8B 40 38	     1					MOV				RAX, Q_PTR [ R8 ] [ 7 * 8 ]		; dividend [ idx ] -> RAX
+ 0000096A  49/ F7 F1	     1					DIV				R9									; divide by divisor in R9 (as passed)
+ 0000096D  48/ 89 41 38	     1					MOV				Q_PTR [ RCX ] [ 7 * 8 ], RAX		; quotient [ idx ] <- RAX ; Note: remainder in RDX for next divide
 
 				; Last (least significant qword) divide leaves a remainder, store it at callers remainder
- 00000921  49/ 89 12						MOV				Q_PTR [ R10 ], RDX					; remainder to callers remainder
- 00000924  48/ 33 C0						XOR				RAX, RAX							; return zero
- 00000927			@@exit:			
- 00000927  C3							RET
+ 00000971  49/ 89 12						MOV				Q_PTR [ R10 ], RDX					; remainder to callers remainder
+ 00000974  48/ 33 C0						XOR				RAX, RAX							; return zero
+ 00000977			@@exit:			
+ 00000977  C3							RET
 
 				; Exception handling, divide by zero
- 00000928			@@DivByZero:
+ 00000978			@@DivByZero:
 								Zero512			RCX									; Divide by Zero. Could throw fault, but returning zero quotient, zero remainder
 			     1		IF		__UseZ
 			     1					CheckAlign		RCX
-			     2					LOCAL			ok
 			     2		IF	__CheckAlign
- 00000928  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
+ 00000978  48/ F7 C1	     2					TEST			RCX, 63							; Is specified param aligned 64?
 	   0000003F
- 0000092F  74 07	     2					JZ				@F									; Yes, passes test, continue
- 00000931  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
- 00000937  C3		     2					RET													; Return to caller, with GPFault code in EAX
- 00000938		     2	@@:
+ 0000097F  74 07	     2					JZ				@F									; Yes, passes test, continue
+ 00000981  8B 05 00000054 R  2					MOV				EAX, ret_GPFault					; Windows code for General Protection Fault	
+			     2			IFNB	<>
+			     2					JMP												; Return to caller, with GPFault code in EAX
+			     2			ELSE
+ 00000987  CC		     2					INT				3									; No, fault
+			     2			ENDIF
+ 00000988		     2	@@:
 			     2		ENDIF
- 00000938  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
+ 00000988  62 01 85 40/ EF   1					VPXORQ			ZMM31, ZMM31, ZMM31
 	   FF
- 0000093E  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
+ 0000098E  62 61 FD 48/ 7F   1					VMOVDQA64		ZM_PTR [ RCX ], ZMM31
 	   39
 			     1		ELSEIF	__UseY
 			     1					CheckAlign		RCX
@@ -2524,18 +2663,18 @@ ui512md.asm						     Page 1 - 1
 			     1					MOV				Q_PTR [ RCX ] [ idx * 8 ], RAX
 			     1					ENDM
 			     1		ENDIF
- 00000944  48/ 33 C0						XOR				RAX, RAX
- 00000947  49/ 89 02						MOV				Q_PTR [ R10 ] , RAX
- 0000094A  8D 04 25						LEA				EAX, [ retcode_neg_one ]			; return error (div by zero)
+ 00000994  48/ 33 C0						XOR				RAX, RAX
+ 00000997  49/ 89 02						MOV				Q_PTR [ R10 ] , RAX
+ 0000099A  8D 04 25						LEA				EAX, [ retcode_neg_one ]			; return error (div by zero)
 	   FFFFFFFF
- 00000951  EB D4						JMP				@@exit
+ 000009A1  EB D4						JMP				@@exit
 
- 00000953			div_uT64		ENDP
+ 000009A3			div_uT64		ENDP
 								Other_Exit		div_uT64, ui512
- 00000953		     1	ui512			ENDS
+ 000009A3		     1	ui512			ENDS
 
 								END
-Microsoft (R) Macro Assembler (x64) Version 14.44.35215.0   08/28/25 19:12:55
+Microsoft (R) Macro Assembler (x64) Version 14.44.35215.0   09/04/25 22:46:35
 ui512md.asm						     Symbols 2 - 1
 
 
@@ -2590,18 +2729,18 @@ Segments:
 
                 N a m e                  Length   Align   Class
 
-ui512D . . . . . . . . . . . . .	 00000061 64	  'RODATA'  
-ui512  . . . . . . . . . . . . .	 00000953 16	  'CODE'	
+ui512D . . . . . . . . . . . . .	 00000061 64	  'CONST'	 
+ui512  . . . . . . . . . . . . .	 000009A3 16	  'CODE'	
 
 
 Procedures, parameters, and locals:
 
                 N a m e                 Type     Value    Attr
 
-div_uT64 . . . . . . . . . . . .	P 	 000008A0 ui512	Length= 000000B3 Public
-  @@exit . . . . . . . . . . . .	L 	 00000927 ui512	
-  @@DivByZero  . . . . . . . . .	L 	 00000928 ui512	
-div_u  . . . . . . . . . . . . .	P 	 000003D0 ui512	Length= 000004C4 Public
+div_uT64 . . . . . . . . . . . .	P 	 000008F0 ui512	Length= 000000B3 Public
+  @@exit . . . . . . . . . . . .	L 	 00000977 ui512	
+  @@DivByZero  . . . . . . . . .	L 	 00000978 ui512	
+div_u  . . . . . . . . . . . . .	P 	 000003D0 ui512	Length= 00000519 Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000080
   currnumerator  . . . . . . . .	QWord	 rbp - 00000100
   qdiv . . . . . . . . . . . . .	QWord	 rbp - 00000180
@@ -2628,23 +2767,25 @@ div_u  . . . . . . . . . . . . .	P 	 000003D0 ui512	Length= 000004C4 Public
   mDim . . . . . . . . . . . . .	Word	 rbp - 0000027A
   nDim . . . . . . . . . . . . .	Word	 rbp - 0000027C
   padding2 . . . . . . . . . . .	QWord	 rbp - 000002FC
-  mbynDiv  . . . . . . . . . . .	L 	 0000053D ui512	
-  D3 . . . . . . . . . . . . . .	L 	 0000066B ui512	
-  D4 . . . . . . . . . . . . . .	L 	 00000693 ui512	
-  D5 . . . . . . . . . . . . . .	L 	 00000739 ui512	
-  D6 . . . . . . . . . . . . . .	L 	 00000752 ui512	
-  D7 . . . . . . . . . . . . . .	L 	 00000776 ui512	
-  D8UnNormalize  . . . . . . . .	L 	 0000078B ui512	
-  cleanupret . . . . . . . . . .	L 	 000007E2 ui512	
-  cleanupwretcode  . . . . . . .	L 	 000007E5 ui512	
-  divbyzero  . . . . . . . . . .	L 	 00000820 ui512	
-  numtoremain  . . . . . . . . .	L 	 00000829 ui512	
-  @sub . . . . . . . . . . . . .	L 	 0000086A ui512	
-  @e1  . . . . . . . . . . . . .	L 	 0000087D ui512	
-  @addback . . . . . . . . . . .	L 	 0000087F ui512	
-  @e2  . . . . . . . . . . . . .	L 	 00000892 ui512	
-mult_uT64  . . . . . . . . . . .	P 	 000002F0 ui512	Length= 000000CB Public
-mult_u . . . . . . . . . . . . .	P 	 00000010 ui512	Length= 000002D8 Public
+  mbynDiv  . . . . . . . . . . .	L 	 00000540 ui512	
+  D3 . . . . . . . . . . . . . .	L 	 00000666 ui512	
+  D4 . . . . . . . . . . . . . .	L 	 0000068E ui512	
+  D5 . . . . . . . . . . . . . .	L 	 00000733 ui512	
+  D6 . . . . . . . . . . . . . .	L 	 0000074C ui512	
+  D7 . . . . . . . . . . . . . .	L 	 00000770 ui512	
+  D8UnNormalize  . . . . . . . .	L 	 00000785 ui512	
+  cleanupret . . . . . . . . . .	L 	 000007DA ui512	
+  cleanupwretcode  . . . . . . .	L 	 000007DD ui512	
+  divbyzero  . . . . . . . . . .	L 	 00000817 ui512	
+  divbyone . . . . . . . . . . .	L 	 00000820 ui512	
+  numtoremain  . . . . . . . . .	L 	 00000882 ui512	
+  @sub . . . . . . . . . . . . .	L 	 000008C1 ui512	
+  @e1  . . . . . . . . . . . . .	L 	 000008D4 ui512	
+  @addback . . . . . . . . . . .	L 	 000008D5 ui512	
+  @e2  . . . . . . . . . . . . .	L 	 000008E8 ui512	
+mult_uT64  . . . . . . . . . . .	P 	 000002F0 ui512	Length= 000000D3 Public
+  @@exit . . . . . . . . . . . .	L 	 000003C2 ui512	
+mult_u . . . . . . . . . . . . .	P 	 00000010 ui512	Length= 000002CD Public
   padding1 . . . . . . . . . . .	QWord	 rbp - 00000040
   product  . . . . . . . . . . .	QWord	 rbp - 000000C0
   savedRBP . . . . . . . . . . .	QWord	 rbp - 000000C8
@@ -2656,10 +2797,10 @@ mult_u . . . . . . . . . . . . .	P 	 00000010 ui512	Length= 000002D8 Public
   plierl . . . . . . . . . . . .	Word	 rbp - 000000F2
   candl  . . . . . . . . . . . .	Word	 rbp - 000000F4
   padding2 . . . . . . . . . . .	QWord	 rbp - 00000174
-  @@multloop . . . . . . . . . .	L 	 00000156 ui512	
-  @@exit . . . . . . . . . . . .	L 	 0000021E ui512	
-  @@zeroandexit  . . . . . . . .	L 	 00000240 ui512	
-  @@copyandexit  . . . . . . . .	L 	 0000028A ui512	
+  @@multloop . . . . . . . . . .	L 	 00000155 ui512	
+  @@exit . . . . . . . . . . . .	L 	 00000219 ui512	
+  @@zeroandexit  . . . . . . . .	L 	 0000023A ui512	
+  @@copyandexit  . . . . . . . .	L 	 00000282 ui512	
 
 
 Symbols:
@@ -2683,7 +2824,7 @@ YM_PTR . . . . . . . . . . . . .	Text   	 YMMWORD PTR
 ZM_PTR . . . . . . . . . . . . .	Text   	 ZMMWORD PTR
 __CheckAlign . . . . . . . . . .	Number	 00000001h   
 __UseBMI2  . . . . . . . . . . .	Number	 00000001h   
-__UseQ . . . . . . . . . . . . .	Number	 00000000h   
+__UseQ . . . . . . . . . . . . .	Number	 00000001h   
 __UseX . . . . . . . . . . . . .	Number	 00000000h   
 __UseY . . . . . . . . . . . . .	Number	 00000000h   
 __UseZ . . . . . . . . . . . . .	Number	 00000001h   
