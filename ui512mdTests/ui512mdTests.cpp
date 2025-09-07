@@ -33,12 +33,12 @@ namespace ui512mdTests
 	{
 	public:
 
-		const s32 runcount = 1000;
-		const s32 regvercount = 5000;
-		const s32 timingcount = 1000000;
-		const s32 timingcount_short = 50000;
-		const s32 timingcount_medium = 150000;
-		const s32 timingcount_long = 300000;
+		const s32 test_run_count = 10000;
+		const s32 reg_verification_count = 5000;
+		const s32 timing_count = 1000000;
+		const s32 timing_count_short = 5000;
+		const s32 timing_count_medium = 50000;
+		const s32 timing_count_long = 100000;
 
 		/// <summary>
 		/// Random number generator
@@ -162,7 +162,7 @@ namespace ui512mdTests
 			};
 
 			// 2. zero times random
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				zero_u(num1);
 				RandomFill(num2, &seed);
@@ -181,7 +181,7 @@ namespace ui512mdTests
 			};
 
 			// 3. random times zero
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				zero_u(num2);
 				RandomFill(num1, &seed);
@@ -200,7 +200,7 @@ namespace ui512mdTests
 			};
 
 			// 4. one times random
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				set_uT64(num1, 1ull);
 				RandomFill(num2, &seed);
@@ -219,7 +219,7 @@ namespace ui512mdTests
 			};
 
 			// 5. random times one
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				set_uT64(num2, 1ull);
 				RandomFill(num1, &seed);
@@ -239,7 +239,7 @@ namespace ui512mdTests
 
 			{
 				string test_message = _MSGA("Multiply function testing.\nEdge cases: zero times zero, zero times random, random times zero, one times random, random times one. "
-					<< runcount << " times each, with pseudo random values.\n";);
+					<< test_run_count << " times each, with pseudo random values.\n";);
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values, return value, and volatile register integrity: each via assert.\n");
 			};
@@ -249,7 +249,7 @@ namespace ui512mdTests
 
 			// First test, a simple multiply by two. 
 			// Easy to check as the expected answer is a shift left, expected overflow is a shift right
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(num1, &seed);					//	random initialize multiplicand				
 				set_uT64(num2, 2ull);						//	initialize multiplier				
@@ -269,7 +269,7 @@ namespace ui512mdTests
 				}
 			};
 			{
-				string test_message = _MSGA("First test, a simple multiply by two.  " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("First test, a simple multiply by two.  " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values, return value, and volatile register integrity: all via assert.\n");
 			};
@@ -277,7 +277,7 @@ namespace ui512mdTests
 			// Second test, a simple multiply by a random power of two. 
 			// Still relatively easy to check as the expected answer is a shift left,
 			// expected overflow is a shift right
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(num1, &seed);
 				set_uT64(num2, 1ull);
@@ -298,7 +298,7 @@ namespace ui512mdTests
 			};
 
 			{
-				string test_message = _MSGA("Second test, a simple multiply by a random power of two. " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("Second test, a simple multiply by a random power of two. " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values, return value, and volatile register integrity: all via assert.\n");
 			};
@@ -306,7 +306,7 @@ namespace ui512mdTests
 			// Third test, a simple multiply by a random 64 bit integer. 
 			// Still relatively easy to check as the expected answer is a shift left,
 			// expected overflow is a shift right
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(num1, &seed);
 				u64 num2_64 = RandomU64(&seed);
@@ -328,14 +328,14 @@ namespace ui512mdTests
 			};
 
 			{
-				string test_message = _MSGA("Third test, a multiply by a random 64 bit value. " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("Third test, a multiply by a random 64 bit value. " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values, return value, and volatile register integrity: all via assert.\n");
 			};
 
 			// Fourth test, a multiply by sums of random powers of two into a 64 bit value. 
 			// Building "expected" is a bit more complicated. This test is more about correctly building "expected"
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				bool rbits[64];
 				std::memset(rbits, 0, sizeof(rbits));
@@ -448,14 +448,14 @@ namespace ui512mdTests
 			};
 
 			{
-				string test_message = _MSGA("Fourth test. Multiply by sums of random powers of two, building ""expected"" 64 bit only; " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("Fourth test. Multiply by sums of random powers of two, building ""expected"" 64 bit only; " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values, return value, and volatile register integrity: all via assert.\n");
 			}
 
 			// Fifth test, a multiply by sums of random powers of two into a 512 bit value. 
 			// Building "expected" is a bit more complicated. 
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				bool rbits[512];
 				std::memset(rbits, 0, sizeof(rbits));
@@ -541,7 +541,7 @@ namespace ui512mdTests
 				}
 			};
 			{
-				string test_message = _MSGA("Fifth test. Multiply by sums of random powers of two, building ""expected"" full 512 bit; " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("Fifth test. Multiply by sums of random powers of two, building ""expected"" full 512 bit; " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values, return value, and volatile register integrity: each via assert.\n");
 			};
@@ -564,12 +564,12 @@ namespace ui512mdTests
 				num2[i] = RandomU64(&seed);
 			}
 
-			for (int i = 0; i < timingcount; i++)
+			for (int i = 0; i < timing_count; i++)
 			{
 				mult_u(product, overflow, num1, num2);
 			};
 			{
-				string test_message = _MSGA("Multiply function timing test. Ran " << timingcount << " times.\n");
+				string test_message = _MSGA("Multiply function timing test. Ran " << timing_count << " times.\n");
 				Logger::WriteMessage(test_message.c_str());
 			};
 		};
@@ -577,277 +577,340 @@ namespace ui512mdTests
 		TEST_METHOD(ui512md_01_mul_performance_timing)
 		{
 			// Performance timing tests.
-			// Run in three batches, short, medium, long
-			// Short run, 100,000 times. Use first batch to determine mean / min / max
-			// Medium run, 250,000 times. Using mean / min / max: determine variance from mean, standard of deviation
-			// Long run, 500,000 times. Count occurrences by variance bands from mean, using standard of deviation, saving outliers for further examination
-			// Note: the timingcount_short, timingcount_medium, and timingcount_long constants are defined at the head of this class
+			// Ref: "Essentials of Modern Business Statistics", 7th Ed, by Anderson, Sweeney, Williams, Camm, Cochran. South-Western, 2015
+			// Sections 3.2, 3.3, 3.4
+			// Note: these tests are not pass/fail, they are informational only
+
+			_UI512(num1) { 0 };
+			_UI512(num2) { 0 };
+			_UI512(product) { 0 };
+			_UI512(overflow) { 0 };
+
+			u64 seed = 0;
 
 			double total_short = 0.0;
 			double min_short = 1000000.0;
 			double max_short = 0.0;
 			double mean_short = 0.0;
+			double population_variance_short = 0.0;
+			double stddev_short = 0.0;
+			double coefficient_of_variation_short = 0.0;
 
 			double total_medium = 0.0;
 			double min_medium = 1000000.0;
 			double max_medium = 0.0;
 			double mean_medium = 0.0;
-			double variance_medium = 0.0;
+			double population_variance_medium = 0.0;
 			double stddev_medium = 0.0;
+			double coefficient_of_variation_medium = 0.0;
+			std::vector<double> x_i_medium(timing_count_medium);
+			std::vector<double> z_scores_medium(timing_count_medium);
 
 			double total_long = 0.0;
 			double min_long = 1000000.0;
 			double max_long = 0.0;
 			double mean_long = 0.0;
-			double variance_long = 0.0;
+			double population_variance_long = 0.0;
 			double stddev_long = 0.0;
+			double coefficient_of_variation_long = 0.0;
+			std::vector<double> x_i_long(timing_count_long);
+			std::vector<double> z_scores_long(timing_count_long);
+
 			int varbands_long[9]{ 0,0,0,0,0,0,0,0,0 };
-			// bands: < -3 stddev, -3 to -2 stddev, -2 to -1 stddev, -1 to mean, mean to +1 stddev, +1 to +2 stddev, +2 to +3 stddev, > +3 stddev
-			const int outlier_threshold = 5; // microseconds
+
+			double outlier_threshold = 0.0;
 
 			struct outlier
 			{
-				_UI512(num1);
-				_UI512(num2);
-				_UI512(product);
-				_UI512(overflow);
-				s16 returncode;
 				int iteration;
 				double duration;
 				double variance;
+				double z_score;
 			};
 			vector<outlier> outliers;
 
-			struct instance
+			// First batch, short run
 			{
-				double deviation;
+				std::vector<double> x_i_short(timing_count_short);
+				std::vector<double> z_scores_short(timing_count_short);
+
+				//Run target function timing_count_short times, capturing each time, also getting min, max, and total time spent
+				for (int i = 0; i < timing_count_short; i++)
+				{
+					RandomFill(num1, &seed);
+					RandomFill(num2, &seed);
+					auto countStart = std::chrono::steady_clock::now();
+					mult_u(product, overflow, num1, num2);
+					auto countEnd = std::chrono::steady_clock::now();
+					std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
+					double duration = countDur.count();
+					min_short = (duration < min_short) ? duration : min_short;
+					max_short = (duration > max_short) ? duration : max_short;
+					total_short += duration;
+					x_i_short[i] = duration;
+				};
+
+				// Calculate mean, population variance, standard deviation, coefficient of variation, and z-scores
+				{
+					mean_short = total_short / double(timing_count_short);
+					for (int i = 0; i < timing_count_short; i++)
+					{
+						double deviation = x_i_short[i] - mean_short;
+						population_variance_short += deviation * deviation;
+					};
+
+					population_variance_short /= double(timing_count_short);
+					stddev_short = sqrt(population_variance_short);
+					coefficient_of_variation_short = (mean_short != 0.0) ? (stddev_short / mean_short) * 100.0 : 0.0;
+					for (int i = 0; i < timing_count_short; i++)
+					{
+						z_scores_short[i] = (stddev_short != 0.0) ? (x_i_short[i] - mean_short) / stddev_short : 0.0;
+					};
+
+					string test_message = _MSGA("Multiply function performance timing test.\nFirst batch. \nRan "
+						<< timing_count_short << " times.\nTotal execution time: "
+						<< total_short << " microseconds. \nAverage time per call : "
+						<< mean_short << " microseconds.\nMinimum in "
+						<< min_short << " .\nMaximum in "
+						<< max_short << " .\n");
+
+					test_message += _MSGA("Population Variance: "
+						<< population_variance_short << " .\nStandard Deviation: "
+						<< stddev_short << " .\nCoefficient of Variation: "
+						<< coefficient_of_variation_short << " %.\n");
+
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// Identify outliers, based on outlier_threshold
+				for (int i = 0; i < timing_count_short; i++)
+				{
+					double z_sc = z_scores_short[i];
+					double abs_z_score = (z_sc < 0.0) ? -z_sc : z_sc;
+					outlier_threshold = 3.0 * stddev_short;
+					if (abs_z_score > 3.0)
+					{
+						outlier o;
+						o.iteration = i;
+						o.duration = x_i_short[i];
+						o.z_score = z_scores_short[i];;
+						outliers.push_back(o);
+					};
+				};
+
+				// Report on outliers, if any
+				// Note: in a normal distribution, 99.7% of all values will be within three standard deviations of the mean
+				// Thus, any value outside that range is an outlier
+				// In this test, we are looking for unexpected occurrences of outliers, which may indicate some kind of
+				// external interference in the timing test (such as OS activity, etc)
+				// If the number of outliers is small (say under 1% of total), then it is likely not a problem
+				// If the number of outliers is larger (say over 5% of total), then there may be a problem with the test environment
+
+				// Note: some functions may have a bi-modal distribution, in which case you must temper the results of the outlier test.
+				// mult_u has a propagating carry loop, which may cause a bi-modal distribution, or at least a widening of the distribution
+				// Further, the CPU clock penalty of starting AVX instructions on some processors may cause outliers
+				if (outliers.size() > 0)
+				{
+					string test_message = _MSGA("Identified " << outliers.size() << " outliers, based on threshold of "
+						<< outlier_threshold << " three standard deviations from mean of " << mean_short << " microseconds (us).\n\n");
+					test_message += " Iteration | Duration (us) | Z Score (us) | \n";
+					test_message += "-----------|---------------|---------------|\n\n";
+					for (auto& o : outliers)
+					{
+						test_message += format("{:10d} |", o.iteration);
+						test_message += format("{:13.2f}  |", o.duration);
+						test_message += format("{:13.4f}  |", o.z_score);
+						test_message += "\n";
+					};
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// End of first batch
+				x_i_short.clear();
+				z_scores_short.clear();
+				outliers.clear();
 			};
 
-			// First batch, short run
-			// determine mean / min / max
-			{
-				u64 seed = 0;
-				_UI512(num1) { 0 };
-				_UI512(num2) { 0 };
-				_UI512(product) { 0 };
-				_UI512(overflow) { 0 };
-
-				for (int i = 0; i < timingcount_short; i++)
-				{
-					RandomFill(num1, &seed);
-					RandomFill(num2, &seed);
-					auto countStart = std::chrono::high_resolution_clock::now();
-					mult_u(product, overflow, num1, num2);
-					auto countEnd = std::chrono::high_resolution_clock::now();
-					std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
-					double countDurus = countDur.count();
-					min_short = (countDurus < min_short) ? countDurus : min_short;
-					max_short = (countDurus > max_short) ? countDurus : max_short;
-					total_short += countDurus;
-				};
-				{
-					double mean_short = total_short / double(timingcount_short);
-					string test_message = _MSGA("Multiply function performance timing test.\nFirst batch. \nRan "
-						<< timingcount_short << " times.\nTotal execution time: "
-						<< total_short / 1000 << " milliseconds. \nAverage time per call : "
-						<< mean_short << " microseconds.\nMinimum in "
-						<< min_short << " microseconds.\nMaximum in "
-						<< max_short << " microseconds.\n");
-					Logger::WriteMessage(test_message.c_str());
-				};
-			}
-
 			// Second batch, medium run
-			// Using mean / min / max: determine variance from mean, standard of deviation
 			{
-				for (int i = 0; i < timingcount_medium; i++)
-				{
-					u64 seed = 0;
-					_UI512(num1) { 0 };
-					_UI512(num2) { 0 };
-					_UI512(product) { 0 };
-					_UI512(overflow) { 0 };
+				std::vector<double> x_i_medium(timing_count_medium);
+				std::vector<double> z_scores_medium(timing_count_medium);
+				outliers.clear();
 
+				//Run target function timing_count_medium times, capturing each time, also getting min, max, and total time spent
+				for (int i = 0; i < timing_count_medium; i++)
+				{
 					RandomFill(num1, &seed);
 					RandomFill(num2, &seed);
-					auto countStart = std::chrono::high_resolution_clock::now();
+					auto countStart = std::chrono::steady_clock::now();
 					mult_u(product, overflow, num1, num2);
-					auto countEnd = std::chrono::high_resolution_clock::now();
+					auto countEnd = std::chrono::steady_clock::now();
 					std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
-					double countDurus = countDur.count();
-					min_medium = (countDurus < min_medium) ? countDurus : min_medium;
-					max_medium = (countDurus > max_medium) ? countDurus : max_medium;
-					total_medium += countDurus;
+					double duration = countDur.count();
+					min_medium = (duration < min_medium) ? duration : min_medium;
+					max_medium = (duration > max_medium) ? duration : max_medium;
+					total_medium += duration;
+					x_i_medium[i] = duration;
 				};
+
+				// Calculate mean, population variance, standard deviation, coefficient of variation, and z-scores
 				{
-					u64 seed = 0;
-					_UI512(num1) { 0 };
-					_UI512(num2) { 0 };
-					_UI512(product) { 0 };
-					_UI512(overflow) { 0 };
-					mean_medium = total_medium / double(timingcount_medium);
-					double varsum = 0.0;
-					variance_medium = 0.0;
-					stddev_medium = 0.0;
-					for (int i = 0; i < timingcount_medium; i++)
+					mean_medium = total_medium / double(timing_count_medium);
+					for (int i = 0; i < timing_count_medium; i++)
 					{
-						RandomFill(num1, &seed);
-						RandomFill(num2, &seed);
-						auto countStart = std::chrono::high_resolution_clock::now();
-						mult_u(product, overflow, num1, num2);
-						auto countEnd = std::chrono::high_resolution_clock::now();
-						std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
-						double countDurus = countDur.count();
-						double var = mean_medium - countDurus;
-						varsum += var * var;
+						double deviation = x_i_medium[i] - mean_medium;
+						population_variance_medium += deviation * deviation;
 					};
-					variance_medium = varsum / double(timingcount_medium);
-					stddev_medium = sqrt(variance_medium);
+					population_variance_medium /= double(timing_count_medium);
+					stddev_medium = sqrt(population_variance_medium);
+					coefficient_of_variation_medium = (mean_medium != 0.0) ? (stddev_medium / mean_medium) * 100.0 : 0.0;
+					for (int i = 0; i < timing_count_medium; i++)
+					{
+						z_scores_medium[i] = (stddev_medium != 0.0) ? (x_i_medium[i] - mean_medium) / stddev_medium : 0.0;
+					};
+
 					string test_message = _MSGA("\nSecond batch. \nRan "
-						<< timingcount_medium << " times.\nTotal execution time: "
-						<< total_medium / 1000 << " milliseconds. \nAverage time per call : "
+						<< timing_count_medium << " times.\nTotal execution time: "
+						<< total_medium << " microseconds. \nAverage time per call : "
 						<< mean_medium << " microseconds.\nMinimum in "
-						<< min_medium << " microseconds.\nMaximum in "
-						<< max_medium << " microseconds.\nVariance: "
-						<< variance_medium << " microseconds.\nStandard Deviation: "
-						<< stddev_medium << " microseconds.\n");
+						<< min_medium << " .\nMaximum in "
+						<< max_medium << " .\n");
+
+					test_message += _MSGA("Population Variance: "
+						<< population_variance_medium << " .\nStandard Deviation: "
+						<< stddev_medium << " .\nCoefficient of Variation: "
+						<< coefficient_of_variation_medium << " %.\n");
+
 					Logger::WriteMessage(test_message.c_str());
 				};
 
-				// Third batch, long run
-				// Count occurrences by variance bands from mean, using standard of deviation
+				// Identify outliers, based on outlier_threshold
+				for (int i = 0; i < timing_count_medium; i++)
 				{
-					double sdev_5 = 0.5 * stddev_medium;
-					double sdev1_5 = 1.5 * stddev_medium;
-					double sdev2_5 = 2.5 * stddev_medium;
-					double sdev3_5 = 3.5 * stddev_medium;
-					for (int i = 0; i < timingcount_long; i++)
+					double z_sc = z_scores_medium[i];
+					double abs_z_score = (z_sc < 0.0) ? -z_sc : z_sc;
+					outlier_threshold = 3.0 * stddev_medium;
+					if (abs_z_score > 3.0)
 					{
-						u64 seed = 0;
-						_UI512(num1) { 0 };
-						_UI512(num2) { 0 };
-						_UI512(product) { 0 };
-						_UI512(overflow) { 0 };
-						RandomFill(num1, &seed);
-						RandomFill(num2, &seed);
-						auto countStart = std::chrono::high_resolution_clock::now();
-						s16 ret = mult_u(product, overflow, num1, num2);
-						auto countEnd = std::chrono::high_resolution_clock::now();
-						std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
-						double countDurus = countDur.count();
-						min_long = (countDurus < min_long) ? countDurus : min_long;
-						max_long = (countDurus > max_long) ? countDurus : max_long;
-						total_long += countDurus;
-						double var = countDurus - mean_medium;
-						double absvar = (var < 0.0) ? -var : var;
-
-						if (absvar <= sdev_5)
-						{
-							varbands_long[4]++;
-						}
-						else if (var <= -sdev_5 && var > -sdev1_5)
-						{
-							varbands_long[3]++;
-						}
-						else if (var <= -sdev1_5 && var > -sdev2_5)
-						{
-							varbands_long[2]++;
-						}
-						else if (var = -sdev2_5 && var > -sdev3_5)
-						{
-							varbands_long[1]++;
-						}
-						else if (var <= -sdev3_5)
-						{
-							varbands_long[0]++;
-						}
-						else if (var >= sdev_5 && var < sdev1_5)
-						{
-							varbands_long[5]++;
-						}
-						else if (var >= sdev1_5 && var <= sdev2_5)
-						{
-							varbands_long[6]++;
-						}
-						else if (var >= sdev2_5 && var <= sdev3_5)
-						{
-							varbands_long[7]++;
-						}
-						else if (var >= sdev3_5)
-						{
-							varbands_long[7]++;
-						};
-
-						if (absvar > sdev3_5)
-						{
-							outlier ol;
-							copy_u(ol.num1, num1);
-							copy_u(ol.num2, num2);
-							copy_u(ol.product, product);
-							copy_u(ol.overflow, overflow);
-							ol.returncode = ret;
-							ol.iteration = i;
-							ol.duration = countDurus;
-							ol.variance = var;
-							outliers.push_back(ol);
-						}
-					}
-
-					string test_message = _MSGA("\n\nThird batch. \nRan "
-						<< timingcount_long << " times.\nTotal execution time: "
-						<< total_long / 1000 << " milliseconds. \nAverage time per call : "
-						<< mean_medium << " microseconds.\nMinimum in "
-						<< min_long << " microseconds.\nMaximum in "
-						<< max_long << " microseconds.\nVariance: "
-						<< variance_medium << " microseconds.\nStandard Deviation: "
-						<< stddev_medium << " microseconds.\n"
-						<< "Variance bands:\n"
-						<< "< -3.5 stddev: " << varbands_long[0] << "\n"
-						<< "-3.5 to -2.5 stddev: " << varbands_long[1] << "\n"
-						<< "-2.5 to -1.5 stddev: " << varbands_long[2] << "\n"
-						<< "-1.5 to -0.5 stddev: " << varbands_long[3] << "\n"
-						<< "-0.5 to +0.5 stddev: " << varbands_long[4] << "\n"
-						<< "+0.5 to +1.5 stddev: " << varbands_long[5] << "\n"
-						<< "+1.5 to +2.5 stddev: " << varbands_long[6] << "\n"
-						<< "+2.5 to +3.5 stddev: " << varbands_long[7] << "\n"
-						<< "> +3.5 stddev: " << varbands_long[8] << "\n\n"
-						<< "Outliers (deviation more than " << sdev3_5 << " microseconds from mean): " << outliers.size() << "\n\n");
-					Logger::WriteMessage(test_message.c_str());
-
-					if (outliers.size() > 0)
-					{
-						int olcnt = 0;
-						for (auto ol : outliers)
-						{
-							if (olcnt < outlier_threshold)
-							{
-								string test_message = _MSGA("Outlier #" << olcnt << " iteration " << ol.iteration << " duration "
-									<< ol.duration << " microseconds, variance " << ol.variance << " return code " << ol.returncode << "\n"
-									<< "num1: " << _MtoHexString(ol.num1) << "\n"
-									<< "num2: " << _MtoHexString(ol.num2) << "\n"
-									<< "product: " << _MtoHexString(ol.product) << "\n"
-									<< "overflow: " << _MtoHexString(ol.overflow) << "\n\n"
-								);
-								Logger::WriteMessage(test_message.c_str());
-							};
-							olcnt++;
-						};
-						if (outliers.size() > outlier_threshold)
-						{
-							string test_message = _MSGA("... plus " << (outliers.size() - outlier_threshold) << " more outliers.\n");
-							Logger::WriteMessage(test_message.c_str());
-						};
-					}
-					else
-					{
-						string test_message = _MSGA("No outliers.\n");
-						Logger::WriteMessage(test_message.c_str());
+						outlier o;
+						o.iteration = i;
+						o.duration = x_i_medium[i];
+						o.z_score = z_scores_medium[i];;
+						outliers.push_back(o);
 					};
-				}
-			}
+				};
+
+				// Report on outliers, if any
+				if (outliers.size() > 0)
+				{
+					string test_message = _MSGA("Identified " << outliers.size() << " outliers, based on threshold of "
+						<< outlier_threshold << " three standard deviations from mean of " << mean_medium << " microseconds (us).\n\n");
+
+					test_message += _MSGA(" Iteration | Duration (us) | Z Score (us) | \n");
+					test_message += _MSGA("-----------|---------------|---------------|\n\n");
+					for (auto o : outliers)
+					{
+						test_message += format("{:10d} |", o.iteration);
+						test_message += format("{:13.2f}  |", o.duration);
+						test_message += format("{:13.4f}  |", o.z_score);
+						test_message += "\n";
+					};
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// End of second batch
+				x_i_medium.clear();
+				z_scores_medium.clear();
+			};
+			// Third batch, long run
+			{
+				std::vector<double> x_i_long(timing_count_long);
+				std::vector<double> z_scores_long(timing_count_long);
+				outliers.clear();
+				//Run target function timing_count_long times, capturing each time, also getting min, max, and total time spent
+				for (int i = 0; i < timing_count_long; i++)
+				{
+					RandomFill(num1, &seed);
+					RandomFill(num2, &seed);
+					auto countStart = std::chrono::steady_clock::now();
+					mult_u(product, overflow, num1, num2);
+					auto countEnd = std::chrono::steady_clock::now();
+					std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
+					double duration = countDur.count();
+					min_long = (duration < min_long) ? duration : min_long;
+					max_long = (duration > max_long) ? duration : max_long;
+					total_long += duration;
+					x_i_long[i] = duration;
+				};
+				// Calculate mean, population variance, standard deviation, coefficient of variation, and z-scores
+				{
+					mean_long = total_long / double(timing_count_long);
+					for (int i = 0; i < timing_count_long; i++)
+					{
+						double deviation = x_i_long[i] - mean_long;
+						population_variance_long += deviation * deviation;
+					};
+					population_variance_long /= double(timing_count_long);
+					stddev_long = sqrt(population_variance_long);
+					coefficient_of_variation_long = (mean_long != 0.0) ? (stddev_long / mean_long) * 100.0 : 0.0;
+					for (int i = 0; i < timing_count_long; i++)
+					{
+						z_scores_long[i] = (stddev_long != 0.0) ? (x_i_long[i] - mean_long) / stddev_long : 0.0;
+					};
+					string test_message = _MSGA("\nThird batch. \nRan "
+						<< timing_count_long << " times.\nTotal execution time: "
+						<< total_long << " microseconds. \nAverage time per call : "
+						<< mean_long << " microseconds.\nMinimum in "
+						<< min_long << " .\nMaximum in "
+						<< max_long << " .\n");
+
+					test_message += _MSGA("Population Variance: "
+						<< population_variance_long << " .\nStandard Deviation: "
+						<< stddev_long << " .\nCoefficient of Variation: "
+						<< coefficient_of_variation_long << " %.\n");
+
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// Identify outliers, based on outlier_threshold
+				for (int i = 0; i < timing_count_long; i++)
+				{
+					double z_sc = z_scores_long[i];
+					double abs_z_score = (z_sc < 0.0) ? -z_sc : z_sc;
+					outlier_threshold = 3.0 * stddev_long;
+					if (abs_z_score > 3.0)
+					{
+						outlier o;
+						o.iteration = i;
+						o.duration = x_i_long[i];
+						o.z_score = z_scores_long[i];;
+						outliers.push_back(o);
+					};
+				};
+
+				// Report on outliers, if any
+				if (outliers.size() > 0)
+				{
+					string test_message = _MSGA("Identified " << outliers.size() << " outliers, based on threshold of "
+						<< outlier_threshold << " three standard deviations from mean of " << mean_long << " microseconds (us).\n\n");
+
+					test_message += _MSGA(" Iteration | Duration (us) | Z Score (us) | \n");
+					test_message += _MSGA("-----------|---------------|---------------|\n\n");
+					for (auto o : outliers)
+					{
+						test_message += format("{:10d} |", o.iteration);
+						test_message += format("{:13.2f}  |", o.duration);
+						test_message += format("{:13.4f}  |", o.z_score);
+						test_message += "\n";
+					};
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// End of third batch
+				x_i_long.clear();
+				z_scores_long.clear();
+			};
 		}
-
-
 		TEST_METHOD(ui512md_01_mul_pnv)
 		{
 			// Path and non-volatile reg tests
@@ -866,7 +929,7 @@ namespace ui512mdTests
 				num2[i] = RandomU64(&seed);
 			}
 
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				r_before.Clear();
 				reg_verify((u64*)&r_before);
@@ -877,7 +940,7 @@ namespace ui512mdTests
 			};
 
 			{
-				string test_message = _MSGA("Multiply function: path and non-volatile reg tests. Ran " << runcount << " times.\n");
+				string test_message = _MSGA("Multiply function: path and non-volatile reg tests. Ran " << test_run_count << " times.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			}
@@ -917,7 +980,7 @@ namespace ui512mdTests
 			};
 
 			// 2. zero times random
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				zero_u(num1);
 				num2 = RandomU64(&seed);
@@ -933,7 +996,7 @@ namespace ui512mdTests
 			};
 
 			// 3. random times zero
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				num2 = 0;
 				RandomFill(num1, &seed);
@@ -949,7 +1012,7 @@ namespace ui512mdTests
 			};
 
 			// 4. one times random
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				set_uT64(num1, 1ull);
 				num2 = RandomU64(&seed);
@@ -964,7 +1027,7 @@ namespace ui512mdTests
 			};
 
 			// 5. random times one
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				num2 = 1ull;
 				RandomFill(num1, &seed);
@@ -980,7 +1043,7 @@ namespace ui512mdTests
 
 			{
 				string test_message = _MSGA("Multiply function testing. Edge cases: zero times zero, zero times random, random times zero, one times random, random times one. \n "
-					<< runcount << " times each, with pseudo random values.\n";);
+					<< test_run_count << " times each, with pseudo random values.\n";);
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
 			};
@@ -989,7 +1052,7 @@ namespace ui512mdTests
 			// First test, a simple multiply by two. 
 			// Easy to check as the expected answer is a shift left,
 			// and expected overflow is a shift right
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				for (int j = 0; j < 8; j++)
 				{
@@ -1010,7 +1073,7 @@ namespace ui512mdTests
 			};
 
 			string runmsg1 = "Multiply (u64) function testing. Simple multiply by 2 " +
-				to_string(runcount) + " times, each with pseudo random values.\n";;
+				to_string(test_run_count) + " times, each with pseudo random values.\n";;
 			Logger::WriteMessage(runmsg1.c_str());
 			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
@@ -1019,7 +1082,7 @@ namespace ui512mdTests
 			// and expected overflow is a shift right
 			for (u16 nrShift = 0; nrShift < 64; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
 			{
-				for (int i = 0; i < runcount / 64; i++)
+				for (int i = 0; i < test_run_count / 64; i++)
 				{
 					RandomFill(num1, &seed);
 					num2 = 1ull << nrShift;
@@ -1037,7 +1100,7 @@ namespace ui512mdTests
 			}
 
 			string runmsg2 = "Multiply (u64) function testing. Multiply by sequential powers of 2 "
-				+ to_string(runcount) + " times, each with pseudo random values.\n";;
+				+ to_string(test_run_count) + " times, each with pseudo random values.\n";;
 			Logger::WriteMessage(runmsg2.c_str());
 			Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 
@@ -1045,7 +1108,7 @@ namespace ui512mdTests
 			// Building "expected" is a bit more complicated
 			const u16 nrBits = 24;
 			u16 BitsUsed[nrBits] = { 0 };
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				u16 bitcnt = 0;
 				fill_n(BitsUsed, nrBits, 0);
@@ -1124,7 +1187,7 @@ namespace ui512mdTests
 			};
 			{
 				string test_message = _MSGA("Multiply function testing. Third test. Multiply by sums of random powers of two, building ""expected""; "
-					<< runcount << " times, each with pseudo random values.\n");
+					<< test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n");
 			}
@@ -1143,13 +1206,13 @@ namespace ui512mdTests
 			RandomFill(num1, &seed);
 			num2 = RandomU64(&seed);
 
-			for (int i = 0; i < timingcount; i++)
+			for (int i = 0; i < timing_count; i++)
 			{
 				mult_uT64(product, &overflow, num1, num2);
 			};
 			{
 				string test_message = _MSGA("Multiply (u64) function timing. Ran "
-					<< timingcount << " times with pseudo random values.\n");
+					<< timing_count << " times with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 			};
 		};
@@ -1167,7 +1230,7 @@ namespace ui512mdTests
 			regs r_after{};
 			RandomFill(num1, &seed);
 			num2 = RandomU64(&seed);
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				reg_verify((u64*)&r_before);
 				mult_uT64(product, &overflow, num1, num2);
@@ -1176,7 +1239,7 @@ namespace ui512mdTests
 			};
 			{
 				string test_message = _MSGA("Multiply (u64) function:  path and non-volatile reg tests. "
-					<< runcount << " times.\n");
+					<< test_run_count << " times.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			}
@@ -1201,7 +1264,7 @@ namespace ui512mdTests
 
 			// 1. zero divided by random
 			zero_u(dividend);
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				zero_u(dividend);
 				RandomFill(divisor, &seed);
@@ -1221,7 +1284,7 @@ namespace ui512mdTests
 
 			// 2.random divided by zero
 			zero_u(dividend);
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(dividend, &seed);
 				zero_u(divisor);
@@ -1240,7 +1303,7 @@ namespace ui512mdTests
 			};
 
 			// 3. random divided by one
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(dividend, &seed);
 				set_uT64(divisor, 1);
@@ -1259,7 +1322,7 @@ namespace ui512mdTests
 			};
 
 			// 4. one divided by random
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				zero_u(dividend);
 				set_uT64(dividend, 1);
@@ -1280,7 +1343,7 @@ namespace ui512mdTests
 
 			// 5. random divided by single word divisor, random bit 0->63
 			// expected quotient is a shift right, expected remainder is a shift left
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(dividend, &seed);
 				u16 bitno = RandomU64(&seed) % 63; // bit 0 to 63
@@ -1304,7 +1367,7 @@ namespace ui512mdTests
 			{
 				string test_message = _MSGA("Divide function testing.\n Edge cases: zero divided by random, random divided by zero, random divided by one"
 					"one divided by random, random divided by one word of random bit.\n"
-					<< runcount << " times each, with pseudo random values. Non-volatile registers verified.\n");
+					<< test_run_count << " times each, with pseudo random values. Non-volatile registers verified.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			};
@@ -1352,7 +1415,7 @@ namespace ui512mdTests
 			// Easy to check as the expected answer is a shift right,
 			// and expected remainder is a shift left
 
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(dividend, &seed);
 				zero_u(quotient);
@@ -1371,7 +1434,7 @@ namespace ui512mdTests
 			};
 
 			{
-				string test_message = _MSGA("Divide function testing. Simple divide by 2 " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("Divide function testing. Simple divide by 2 " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			}
@@ -1381,7 +1444,7 @@ namespace ui512mdTests
 
 			for (u16 nrShift = 0; nrShift < 512; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
 			{
-				for (int i = 0; i < runcount / 512; i++)
+				for (int i = 0; i < test_run_count / 512; i++)
 				{
 					RandomFill(dividend, &seed);
 					set_uT64(divisor, 1);
@@ -1409,14 +1472,14 @@ namespace ui512mdTests
 				};
 			}
 			{
-				string test_message = _MSGA("Divide function testing. Divide by sequential powers of 2 " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("Divide function testing. Divide by sequential powers of 2 " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			}
 			//	Use case testing
 			//		Divide number by common use case examples
 
-			int adjruncount = runcount / 64;
+			int adjruncount = test_run_count / 64;
 			for (int i = 0; i < adjruncount; i++)
 			{
 				for (int m = 7; m >= 0; m--)
@@ -1452,7 +1515,7 @@ namespace ui512mdTests
 				};
 			};
 			{
-				string test_message = _MSGA("Divide function testing. Ran tests " << runcount << " times, each with pseudo random values.\n");
+				string test_message = _MSGA("Divide function testing. Ran tests " << test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			};
@@ -1477,12 +1540,12 @@ namespace ui512mdTests
 			zero_u(quotient);
 			zero_u(remainder);
 
-			for (int i = 0; i < timingcount; i++)
+			for (int i = 0; i < timing_count; i++)
 			{
 				div_u(quotient, remainder, dividend, divisor);
 			};
 
-			string runmsg = _MSGA("Divide function timing. Ran " << timingcount << " times.\n");
+			string runmsg = _MSGA("Divide function timing. Ran " << timing_count << " times.\n");
 			Logger::WriteMessage(runmsg.c_str());
 		};
 
@@ -1501,7 +1564,7 @@ namespace ui512mdTests
 			RandomFill(num1, &seed);
 			//RandomFill(num2, &seed);
 			set_uT64(num2, 3);
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				reg_verify((u64*)&r_before);
 				div_u(quotient, remainder, num1, num2);
@@ -1509,7 +1572,7 @@ namespace ui512mdTests
 				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
 			};
 			{
-				string test_message = _MSGA("Divide function: path and non-volatile reg tests. " << runcount << " times.\n");
+				string test_message = _MSGA("Divide function: path and non-volatile reg tests. " << test_run_count << " times.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			}
@@ -1527,7 +1590,7 @@ namespace ui512mdTests
 			// Edge case tests
 			// 1. zero divided by random
 			zero_u(dividend);
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				zero_u(dividend);
 				divisor = RandomU64(&seed);
@@ -1543,7 +1606,7 @@ namespace ui512mdTests
 					_MSGW(L"Remainder failed zero divided by random on run #" << i));
 			};
 			// 2. random divided by one
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(dividend, &seed);
 				divisor = 1;
@@ -1559,7 +1622,7 @@ namespace ui512mdTests
 					_MSGW(L"Remainder failed random divided by one " << i));
 			};
 			// 3. random divided by self
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				zero_u(dividend);
 				dividend[7] = RandomU64(&seed);
@@ -1577,7 +1640,7 @@ namespace ui512mdTests
 			};
 			{
 				string test_message = _MSGA("Divide (u64) function testing. Edge cases: zero divided by random, random divided by one, random divided by self. \n "
-					<< runcount << " times each, with pseudo random values.\n";);
+					<< test_run_count << " times each, with pseudo random values.\n";);
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			};
@@ -1586,7 +1649,7 @@ namespace ui512mdTests
 			// Easy to check as the expected answer is a shift right,
 			// and expected remainder is a shift left
 
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				RandomFill(dividend, &seed);
 				zero_u(quotient);
@@ -1606,7 +1669,7 @@ namespace ui512mdTests
 			};
 			{
 				string test_message = _MSGA("Divide (u64) function testing. Simple divide by 2 "
-					<< runcount << " times, each with pseudo random values.\n");
+					<< test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			};
@@ -1617,7 +1680,7 @@ namespace ui512mdTests
 
 			for (u16 nrShift = 0; nrShift < 64; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
 			{
-				for (int i = 0; i < runcount / 64; i++)
+				for (int i = 0; i < test_run_count / 64; i++)
 				{
 					RandomFill(dividend, &seed);
 					divisor = 1ull << nrShift;
@@ -1636,7 +1699,7 @@ namespace ui512mdTests
 			}
 			{
 				string test_message = _MSGA("Divide function testing. Divide by sequential powers of 2 "
-					<< runcount << " times, each with pseudo random values.\n");
+					<< test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			}
@@ -1718,13 +1781,13 @@ namespace ui512mdTests
 			zero_u(quotient);
 			divisor = RandomU64(&seed);
 
-			for (int i = 0; i < timingcount; i++)
+			for (int i = 0; i < timing_count; i++)
 			{
 				div_uT64(quotient, &remainder, dividend, divisor);
 			};
 			{
 				string test_message = _MSGA("Divide by u64  function timing. Ran "
-					<< timingcount << " times.\n");
+					<< timing_count << " times.\n");
 				Logger::WriteMessage(test_message.c_str());
 			};
 		};
@@ -1744,7 +1807,7 @@ namespace ui512mdTests
 			regs r_after{};
 			RandomFill(num1, &seed);
 			num2 = RandomU64(&seed);
-			for (int i = 0; i < runcount; i++)
+			for (int i = 0; i < test_run_count; i++)
 			{
 				r_before.Clear();
 				reg_verify((u64*)&r_before);
@@ -1755,7 +1818,7 @@ namespace ui512mdTests
 			};
 			{
 				string test_message = _MSGA("Divide by u64 function:  path and non-volatile reg tests. "
-					<< runcount << " times.\n");
+					<< test_run_count << " times.\n");
 				Logger::WriteMessage(test_message.c_str());
 				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
 			}
