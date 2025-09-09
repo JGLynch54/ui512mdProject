@@ -56,13 +56,12 @@ namespace ui512mdTests
 			*seed = (*seed == 0ull) ? (a * 4294967291ull + c) % m : (a * *seed + c) % m;
 			return *seed;
 		};
-
 		/// <summary>
-		/// Random fill of ui512 variable
-		/// </summary>
-		/// <param name="var">512 bit variable to be filled</param>
-		/// <param name="seed">seed for random number generator</param>
-		/// <returns>none</returns>
+/// Random fill of ui512 variable
+/// </summary>
+/// <param name="var">512 bit variable to be filled</param>
+/// <param name="seed">seed for random number generator</param>
+/// <returns>none</returns>
 		void RandomFill(u64* var, u64* seed)
 		{
 			for (int i = 0; i < 8; i++)
@@ -70,7 +69,6 @@ namespace ui512mdTests
 				var[i] = RandomU64(seed);
 			};
 		};
-
 
 		TEST_METHOD(random_number_generator)
 		{
@@ -128,6 +126,7 @@ namespace ui512mdTests
 			msgchi += '\n';
 			Logger::WriteMessage(msgchi.c_str());
 		};
+
 		TEST_METHOD(ui512md_01_mul)
 		{
 			// mult_u tests
@@ -1199,6 +1198,7 @@ namespace ui512mdTests
 				Logger::WriteMessage(L"Passed. Tested expected values, return value, and volatile register integrity: each via assert.\n\n");
 			}
 		};
+
 		TEST_METHOD(ui512md_02_mul64_performance_timing)
 		{
 			// Performance timing tests.
@@ -1285,7 +1285,7 @@ namespace ui512mdTests
 						z_scores_short[i] = (stddev_short != 0.0) ? (x_i_short[i] - mean_short) / stddev_short : 0.0;
 					};
 
-					string test_message = _MSGA("Multiply (x64) function performance timing test.\nFirst batch. \nRan for "
+					string test_message = _MSGA("Multiply (x64) function performance timing test.\n\nFirst batch. \nRan for "
 						<< timing_count_short << " samples.\nTotal target function (including c calling set-up) execution time: "
 						<< total_short << " microseconds. \nAverage time per call : "
 						<< mean_short << " microseconds.\nMinimum in "
@@ -1563,6 +1563,9 @@ namespace ui512mdTests
 		TEST_METHOD(ui512md_03_div_pt1)
 		{
 			u64 seed = 0;
+			regs r_before{};
+			regs r_after{};
+
 			_UI512(num1) { 0 };
 			_UI512(num2) { 0 };
 			_UI512(dividend) { 0 };
@@ -1571,8 +1574,6 @@ namespace ui512mdTests
 			_UI512(expectedremainder) { 0 };
 			_UI512(quotient) { 0 };
 			_UI512(remainder) { 0 };
-			regs r_before{};
-			regs r_after{};
 
 			// Edge case tests
 
@@ -1679,221 +1680,168 @@ namespace ui512mdTests
 			};
 
 			{
-				string test_message = _MSGA("Divide function testing.\n Edge cases: zero divided by random, random divided by zero, random divided by one"
-					"one divided by random, random divided by one word of random bit.\n"
-					<< test_run_count << " times each, with pseudo random values. Non-volatile registers verified.\n");
+				string test_message = _MSGA("Divide function testing.\n Edge cases:\n\tzero divided by random,\n\trandom divided by zero,\n\trandom divided by one"
+					"\n\tone divided by random,\n\trandom divided by one word of random bit.\n"
+					<< test_run_count << " times each, with pseudo random values. \n");
 				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+				Logger::WriteMessage(L"Passed. Non-volatile registers verified. Return code verified. Quotient and remainder verified; each via assert.\n\n");
 			};
 
 		};
 
-		TEST_METHOD(ui512md_03_div_pt2)
-		{
-			u64 seed = 0;
-			_UI512(num1) { 0 };
-			_UI512(num2) { 0 };
-			_UI512(dividend) { 0 };
-			_UI512(divisor) { 0 };
-			_UI512(expectedquotient) { 0 };
-			_UI512(expectedremainder) { 0 };
-			_UI512(quotient) { 0 };
-			_UI512(remainder) { 0 };
-			regs r_before{};
-			regs r_after{};
+		//TEST_METHOD(ui512md_03_div_pt2)
+		//{
+		//	u64 seed = 0;
+		//	_UI512(num1) { 0 };
+		//	_UI512(num2) { 0 };
+		//	_UI512(dividend) { 0 };
+		//	_UI512(divisor) { 0 };
+		//	_UI512(expectedquotient) { 0 };
+		//	_UI512(expectedremainder) { 0 };
+		//	_UI512(quotient) { 0 };
+		//	_UI512(remainder) { 0 };
+		//	regs r_before{};
+		//	regs r_after{};
 
-			//	Pre-test: various sizes of dividend / divisor
-			//	Just to exercise various paths through the code
+		//	//	Pre-test: various sizes of dividend / divisor
+		//	//	Just to exercise various paths through the code
 
-			s16 retval = 0;
-			//	Pre-testing, various sizes of dividend / divisor
-			for (int i = 7; i >= 0; i--)
-			{
-				for (int j = 7; j >= 0; j--)
-				{
-					zero_u(dividend);
-					zero_u(divisor);
-					dividend[i] = RandomU64(&seed);
-					divisor[j] = RandomU64(&seed);
-					if ((i == 5 && j == 6) || (i == 6 && j == 7)) {
-						break;
-					}
-					reg_verify((u64*)&r_before);
-					retval = div_u(quotient, remainder, dividend, divisor);
-					reg_verify((u64*)&r_after);
-					Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
-				};
-			};
+		//	s16 retval = 0;
+		//	//	Pre-testing, various sizes of dividend / divisor
+		//	for (int i = 7; i >= 0; i--)
+		//	{
+		//		for (int j = 7; j >= 0; j--)
+		//		{
+		//			zero_u(dividend);
+		//			zero_u(divisor);
+		//			dividend[i] = RandomU64(&seed);
+		//			divisor[j] = RandomU64(&seed);
+		//			if ((i == 5 && j == 6) || (i == 6 && j == 7)) {
+		//				break;
+		//			}
+		//			reg_verify((u64*)&r_before);
+		//			retval = div_u(quotient, remainder, dividend, divisor);
+		//			reg_verify((u64*)&r_after);
+		//			Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+		//		};
+		//	};
 
-			// First test, a simple divide by two. 
-			// Easy to check as the expected answer is a shift right,
-			// and expected remainder is a shift left
+		//	// First test, a simple divide by two. 
+		//	// Easy to check as the expected answer is a shift right,
+		//	// and expected remainder is a shift left
 
-			for (int i = 0; i < test_run_count; i++)
-			{
-				RandomFill(dividend, &seed);
-				zero_u(quotient);
-				set_uT64(divisor, 2);
-				shr_u(expectedquotient, dividend, u16(1));
-				shl_u(expectedremainder, dividend, 511);
-				shr_u(expectedremainder, expectedremainder, 511);
+		//	for (int i = 0; i < test_run_count; i++)
+		//	{
+		//		RandomFill(dividend, &seed);
+		//		zero_u(quotient);
+		//		set_uT64(divisor, 2);
+		//		shr_u(expectedquotient, dividend, u16(1));
+		//		shl_u(expectedremainder, dividend, 511);
+		//		shr_u(expectedremainder, expectedremainder, 511);
 
-				div_u(quotient, remainder, dividend, divisor);
+		//		div_u(quotient, remainder, dividend, divisor);
 
-				for (int j = 0; j < 8; j++)
-				{
-					Assert::AreEqual(expectedquotient[j], quotient[j], _MSGW(L"Quotient at " << j << " failed " << i));
-					Assert::AreEqual(expectedremainder[j], remainder[j], _MSGW(L"Remainder failed " << i));
-				};
-			};
+		//		for (int j = 0; j < 8; j++)
+		//		{
+		//			Assert::AreEqual(expectedquotient[j], quotient[j], _MSGW(L"Quotient at " << j << " failed " << i));
+		//			Assert::AreEqual(expectedremainder[j], remainder[j], _MSGW(L"Remainder failed " << i));
+		//		};
+		//	};
 
-			{
-				string test_message = _MSGA("Divide function testing. Simple divide by 2 " << test_run_count << " times, each with pseudo random values.\n");
-				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-			}
-			// Second test, a simple divide by sequential powers of two. 
-			// Still relatively easy to check as expected answer is a shift right,
-			// and expected remainder is a shift left
+		//	{
+		//		string test_message = _MSGA("Divide function testing. Simple divide by 2 " << test_run_count << " times, each with pseudo random values.\n");
+		//		Logger::WriteMessage(test_message.c_str());
+		//		Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+		//	}
+		//	// Second test, a simple divide by sequential powers of two. 
+		//	// Still relatively easy to check as expected answer is a shift right,
+		//	// and expected remainder is a shift left
 
-			for (u16 nrShift = 0; nrShift < 512; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
-			{
-				for (int i = 0; i < test_run_count / 512; i++)
-				{
-					RandomFill(dividend, &seed);
-					set_uT64(divisor, 1);
-					shl_u(divisor, divisor, nrShift);
-					shr_u(expectedquotient, dividend, nrShift);
-					if (nrShift == 0)
-					{
-						zero_u(expectedremainder);
-					}
-					else
-					{
-						u16 shft = 512 - nrShift;
-						shl_u(expectedremainder, dividend, shft);
-						shr_u(expectedremainder, expectedremainder, shft);
-					}
+		//	for (u16 nrShift = 0; nrShift < 512; nrShift++)	// rather than a random bit, cycle thru all 64 bits 
+		//	{
+		//		for (int i = 0; i < test_run_count / 512; i++)
+		//		{
+		//			RandomFill(dividend, &seed);
+		//			set_uT64(divisor, 1);
+		//			shl_u(divisor, divisor, nrShift);
+		//			shr_u(expectedquotient, dividend, nrShift);
+		//			if (nrShift == 0)
+		//			{
+		//				zero_u(expectedremainder);
+		//			}
+		//			else
+		//			{
+		//				u16 shft = 512 - nrShift;
+		//				shl_u(expectedremainder, dividend, shft);
+		//				shr_u(expectedremainder, expectedremainder, shft);
+		//			}
 
-					div_u(quotient, remainder, dividend, divisor);
+		//			div_u(quotient, remainder, dividend, divisor);
 
-					for (int j = 0; j < 8; j++)
-					{
-						Assert::AreEqual(expectedquotient[j], quotient[j], _MSGW(L"Quotient at " << j << " failed " << nrShift << " at " << i));
-						Assert::AreEqual(expectedremainder[j], remainder[j], _MSGW(L"Remainder failed at " << j << " on " << nrShift << " at " << i));
-					}
+		//			for (int j = 0; j < 8; j++)
+		//			{
+		//				Assert::AreEqual(expectedquotient[j], quotient[j], _MSGW(L"Quotient at " << j << " failed " << nrShift << " at " << i));
+		//				Assert::AreEqual(expectedremainder[j], remainder[j], _MSGW(L"Remainder failed at " << j << " on " << nrShift << " at " << i));
+		//			}
 
-				};
-			}
-			{
-				string test_message = _MSGA("Divide function testing. Divide by sequential powers of 2 " << test_run_count << " times, each with pseudo random values.\n");
-				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-			}
-			//	Use case testing
-			//		Divide number by common use case examples
+		//		};
+		//	}
+		//	{
+		//		string test_message = _MSGA("Divide function testing. Divide by sequential powers of 2 " << test_run_count << " times, each with pseudo random values.\n");
+		//		Logger::WriteMessage(test_message.c_str());
+		//		Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+		//	}
+		//	//	Use case testing
+		//	//		Divide number by common use case examples
 
-			int adjruncount = test_run_count / 64;
-			for (int i = 0; i < adjruncount; i++)
-			{
-				for (int m = 7; m >= 0; m--)
-				{
-					for (int j = 7; j >= 0; j--)
-					{
-						for (int l = 0; l < 8; l++)
-						{
-							num1[l] = RandomU64(&seed);
-							num2[l] = 0;
-							quotient[l] = 0;
-							remainder[l] = 0;
-						};
-						num2[m] = 1;
-						;
-						div_u(quotient, remainder, num1, num2);
+		//	int adjruncount = test_run_count / 64;
+		//	for (int i = 0; i < adjruncount; i++)
+		//	{
+		//		for (int m = 7; m >= 0; m--)
+		//		{
+		//			for (int j = 7; j >= 0; j--)
+		//			{
+		//				for (int l = 0; l < 8; l++)
+		//				{
+		//					num1[l] = RandomU64(&seed);
+		//					num2[l] = 0;
+		//					quotient[l] = 0;
+		//					remainder[l] = 0;
+		//				};
+		//				num2[m] = 1;
+		//				;
+		//				div_u(quotient, remainder, num1, num2);
 
-						for (int v = 7; v >= 0; v--)
-						{
-							int qidx, ridx = 0;
-							u64 qresult, rresult = 0;
+		//				for (int v = 7; v >= 0; v--)
+		//				{
+		//					int qidx, ridx = 0;
+		//					u64 qresult, rresult = 0;
 
-							qidx = v - (7 - m);
-							qresult = (qidx >= 0) ? qresult = (v >= (7 - m)) ? num1[qidx] : 0ull : qresult = 0;
-							rresult = (v > m) ? num1[v] : 0ull;
+		//					qidx = v - (7 - m);
+		//					qresult = (qidx >= 0) ? qresult = (v >= (7 - m)) ? num1[qidx] : 0ull : qresult = 0;
+		//					rresult = (v > m) ? num1[v] : 0ull;
 
-							Assert::AreEqual(quotient[v], qresult, L"Quotient incorrect");
-							Assert::AreEqual(remainder[v], rresult, L" Remainder incorrect");
-						};
+		//					Assert::AreEqual(quotient[v], qresult, L"Quotient incorrect");
+		//					Assert::AreEqual(remainder[v], rresult, L" Remainder incorrect");
+		//				};
 
-						num2[m] = 0;
-					};
-				};
-			};
-			{
-				string test_message = _MSGA("Divide function testing. Ran tests " << test_run_count << " times, each with pseudo random values.\n");
-				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-			};
-		};
+		//				num2[m] = 0;
+		//			};
+		//		};
+		//	};
+		//	{
+		//		string test_message = _MSGA("Divide function testing. Ran tests " << test_run_count << " times, each with pseudo random values.\n");
+		//		Logger::WriteMessage(test_message.c_str());
+		//		Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+		//	};
+		//};
 
-		TEST_METHOD(ui512md_03_div_timing)
-		{
-			// Timing test. Eliminate everything but execution of the subject function
-			// other than set-up, and messaging complete.
-
-			u64 seed = 0;
-			alignas (64) u64 dividend[8]{ 0 };
-			alignas (64) u64 quotient[8]{ 0 };
-			alignas (64) u64 divisor[8]{ 0 };
-			alignas (64) u64 remainder[8]{ 0 };
-
-			for (int i = 0; i < 8; i++)
-			{
-				dividend[i] = RandomU64(&seed);
-				divisor[i] = RandomU64(&seed);
-			}
-			zero_u(quotient);
-			zero_u(remainder);
-
-			for (int i = 0; i < timing_count; i++)
-			{
-				div_u(quotient, remainder, dividend, divisor);
-			};
-
-			string runmsg = _MSGA("Divide function timing. Ran " << timing_count << " times.\n");
-			Logger::WriteMessage(runmsg.c_str());
-		};
-
-		TEST_METHOD(ui512md_03_div_pnv)
-		{
-			// Path and non-volatile reg tests
-
-			u64 seed = 0;
-			_UI512(dividend) { 0 };
-			_UI512(quotient) { 0 };
-			_UI512(num1) { 0 };
-			_UI512(num2) { 0 };
-			_UI512(remainder) { 0 };
-			regs r_before{};
-			regs r_after{};
-			RandomFill(num1, &seed);
-			//RandomFill(num2, &seed);
-			set_uT64(num2, 3);
-			for (int i = 0; i < test_run_count; i++)
-			{
-				reg_verify((u64*)&r_before);
-				div_u(quotient, remainder, num1, num2);
-				reg_verify((u64*)&r_after);
-				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
-			};
-			{
-				string test_message = _MSGA("Divide function: path and non-volatile reg tests. " << test_run_count << " times.\n");
-				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-			}
-		};
 		TEST_METHOD(ui512md_04_div64)
 		{
 			u64 seed = 0;
+			regs r_before{};
+			regs r_after{};
+
 			_UI512(dividend) { 0 };
 			_UI512(quotient) { 0 };
 			_UI512(expectedquotient) { 0 };
@@ -1901,6 +1849,7 @@ namespace ui512mdTests
 			u64 divisor = 0;
 			u64 remainder = 0;
 			u64 expectedremainder = 0;
+
 			// Edge case tests
 			// 1. zero divided by random
 			zero_u(dividend);
@@ -1910,7 +1859,11 @@ namespace ui512mdTests
 				divisor = RandomU64(&seed);
 				zero_u(expectedquotient);
 				expectedremainder = 0;
-				div_uT64(quotient, &remainder, dividend, divisor);
+				reg_verify((u64*)&r_before);
+				s16 retcode = div_uT64(quotient, &remainder, dividend, divisor);
+				reg_verify((u64*)&r_after);
+				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+				Assert::AreEqual(s16(0), retcode, L"Return code failed one divided by random");
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedquotient[j], quotient[j],
@@ -1926,7 +1879,11 @@ namespace ui512mdTests
 				divisor = 1;
 				copy_u(expectedquotient, dividend);
 				expectedremainder = 0;
-				div_uT64(quotient, &remainder, dividend, divisor);
+				reg_verify((u64*)&r_before);
+				s16 retcode = div_uT64(quotient, &remainder, dividend, divisor);
+				reg_verify((u64*)&r_after);
+				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+				Assert::AreEqual(s16(0), retcode, L"Return code failed one divided by random");
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedquotient[j], quotient[j],
@@ -1943,7 +1900,11 @@ namespace ui512mdTests
 				divisor = dividend[7];
 				set_uT64(expectedquotient, 1);
 				expectedremainder = 0;
-				div_uT64(quotient, &remainder, dividend, divisor);
+				reg_verify((u64*)&r_before);
+				s16 retcode = div_uT64(quotient, &remainder, dividend, divisor);
+				reg_verify((u64*)&r_after);
+				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+				Assert::AreEqual(s16(0), retcode, L"Return code failed one divided by random");
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedquotient[j], quotient[j],
@@ -1953,10 +1914,10 @@ namespace ui512mdTests
 					_MSGW(L"Remainder failed random divided by self " << i));
 			};
 			{
-				string test_message = _MSGA("Divide (u64) function testing. Edge cases: zero divided by random, random divided by one, random divided by self. \n "
+				string test_message = _MSGA("Divide (u64) function testing.\n\n Edge cases:\n\tzero divided by random,\n\trandom divided by one,\n\trandom divided by self.\n "
 					<< test_run_count << " times each, with pseudo random values.\n";);
 				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+				Logger::WriteMessage(L"Passed. Non-volatile registers verified. Return code verified. Quotient and remainder verified; each via assert.\n\n");
 			};
 
 			// First test, a simple divide by two. 
@@ -1970,22 +1931,23 @@ namespace ui512mdTests
 				divisor = 2;
 				shr_u(expectedquotient, dividend, u16(1));
 				expectedremainder = (dividend[7] << 63) >> 63;
-
-				div_uT64(quotient, &remainder, dividend, divisor);
-
+				reg_verify((u64*)&r_before);
+				s16 retcode = div_uT64(quotient, &remainder, dividend, divisor);
+				reg_verify((u64*)&r_after);
+				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+				Assert::AreEqual(s16(0), retcode, L"Return code failed one divided by random");
 				for (int j = 0; j < 8; j++)
 				{
 					Assert::AreEqual(expectedquotient[j], quotient[j],
 						_MSGW(L"Quotient at word #" << j << " failed on run #" << i));
 				};
-
 				Assert::AreEqual(expectedremainder, remainder, _MSGW(L"Remainder failed " << i));
 			};
 			{
 				string test_message = _MSGA("Divide (u64) function testing. Simple divide by 2 "
 					<< test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+				Logger::WriteMessage(L"Passed. Non-volatile registers verified. Return code verified. Quotient and remainder verified; each via assert.\n\n");
 			};
 
 			// Second test, a simple divide by sequential powers of two. 
@@ -2000,9 +1962,11 @@ namespace ui512mdTests
 					divisor = 1ull << nrShift;
 					shr_u(expectedquotient, dividend, nrShift);
 					expectedremainder = (nrShift == 0) ? 0 : (dividend[7] << (64 - nrShift)) >> (64 - nrShift);
-
-					div_uT64(quotient, &remainder, dividend, divisor);
-
+					reg_verify((u64*)&r_before);
+					s16 retcode = div_uT64(quotient, &remainder, dividend, divisor);
+					reg_verify((u64*)&r_after);
+					Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+					Assert::AreEqual(s16(0), retcode, L"Return code failed one divided by random");
 					for (int j = 0; j < 8; j++)
 					{
 						Assert::AreEqual(expectedquotient[j], quotient[j],
@@ -2015,7 +1979,7 @@ namespace ui512mdTests
 				string test_message = _MSGA("Divide function testing. Divide by sequential powers of 2 "
 					<< test_run_count << " times, each with pseudo random values.\n");
 				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
+				Logger::WriteMessage(L"Passed. Non-volatile registers verified. Return code verified. Quotient and remainder verified; each via assert.\n\n");
 			}
 
 			// Third test, Use case tests, divide out to get decimal digits. Do whole with random,
@@ -2027,7 +1991,11 @@ namespace ui512mdTests
 				int cnt = 0;
 				while (comp != 0)
 				{
-					div_uT64(dividend, &remainder, dividend, 10ull);
+					reg_verify((u64*)&r_before);
+					s16 retcode = div_uT64(dividend, &remainder, dividend, 10ull);
+					reg_verify((u64*)&r_after);
+					Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+					Assert::AreEqual(s16(0), retcode, L"Return code failed one divided by random");
 					char digit = 0x30 + char(remainder);
 					digits.insert(digits.begin(), digit);
 					comp = compare_uT64(dividend, 0ull);
@@ -2049,18 +2017,22 @@ namespace ui512mdTests
 				}
 				Logger::WriteMessage(L"Use case: Divide to extract decimal digits:\n");
 				Logger::WriteMessage(digits.c_str());
+				Logger::WriteMessage(L"\nPassed. Non-volatile registers verified. Return code verified; each via assert.\n");
 			}
 
 			{
 				string digits = "";
 				u64 num = 12345678910111213ull;
 				set_uT64(dividend, num);
-
 				int comp = compare_uT64(dividend, 0ull);
 				int cnt = 0;
 				while (comp != 0)
 				{
-					div_uT64(dividend, &remainder, dividend, 10ull);
+					reg_verify((u64*)&r_before);
+					s16 retcode = div_uT64(dividend, &remainder, dividend, 10ull);
+					reg_verify((u64*)&r_after);
+					Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+					Assert::AreEqual(s16(0), retcode, L"Return code failed one divided by random");
 					char digit = 0x30 + char(remainder);
 					digits.insert(digits.begin(), digit);
 					comp = compare_uT64(dividend, 0ull);
@@ -2076,66 +2048,371 @@ namespace ui512mdTests
 				}
 				string expected = "12,345,678,910,111,213";
 				Assert::AreEqual(expected, digits);
-				Logger::WriteMessage(L"\n\nUse case: Divide to extract known decimal digits:\n(Validated via assert)\n");
+				Logger::WriteMessage(L"\nUse case: Divide to extract known decimal digits:\n");
 				Logger::WriteMessage(digits.c_str());
+				Logger::WriteMessage(L"\nPassed.\n\tNon-volatile registers verified.\n\tReturn code verified.\n\tExtracted decimal digits verified.\nEach via assert.\n\n");
 			}
 		}
-
-		TEST_METHOD(ui512md_04_div64_timing)
+		TEST_METHOD(ui512md_04_div64_performance_timing)
 		{
-			// Timing test. Eliminate everything but execution of the subject function
-			// other than set-up, and messaging complete.
+			// Performance timing tests.
+			// Ref: "Essentials of Modern Business Statistics", 7th Ed, by Anderson, Sweeney, Williams, Camm, Cochran. South-Western, 2015
+			// Sections 3.2, 3.3, 3.4
+			// Note: these tests are not pass/fail, they are informational only
 
-			u64 seed = 0;
-			_UI512(dividend) { 0 };
-			_UI512(quotient) { 0 };
-			u64 divisor = 0;
-			u64 remainder = 0;
-			RandomFill(dividend, &seed);
-			zero_u(quotient);
-			divisor = RandomU64(&seed);
-
-			for (int i = 0; i < timing_count; i++)
-			{
-				div_uT64(quotient, &remainder, dividend, divisor);
-			};
-			{
-				string test_message = _MSGA("Divide by u64  function timing. Ran "
-					<< timing_count << " times.\n");
-				Logger::WriteMessage(test_message.c_str());
-			};
-		};
-
-		TEST_METHOD(ui512md_04_div64_pnv)
-		{
-			// Path and non-volatile reg tests
-
-			u64 seed = 0;
-			_UI512(dividend) { 0 };
-			_UI512(quotient) { 0 };
 			_UI512(num1) { 0 };
+			_UI512(dividend) { 0 };
+			u64 remainder = 0;
+			u64 num2 = 0;
+			u64 seed = 0;
 
-			u64 num2{ 0 };
-			u64 remainder{ 0 };
-			regs r_before{};
-			regs r_after{};
-			RandomFill(num1, &seed);
-			num2 = RandomU64(&seed);
-			for (int i = 0; i < test_run_count; i++)
+			double total_short = 0.0;
+			double min_short = 1000000.0;
+			double max_short = 0.0;
+			double mean_short = 0.0;
+			double sample_variance_short = 0.0;
+			double stddev_short = 0.0;
+			double coefficient_of_variation_short = 0.0;
+
+			double total_medium = 0.0;
+			double min_medium = 1000000.0;
+			double max_medium = 0.0;
+			double mean_medium = 0.0;
+			double sample_variance_medium = 0.0;
+			double stddev_medium = 0.0;
+			double coefficient_of_variation_medium = 0.0;
+
+			double total_long = 0.0;
+			double min_long = 1000000.0;
+			double max_long = 0.0;
+			double mean_long = 0.0;
+			double sample_variance_long = 0.0;
+			double stddev_long = 0.0;
+			double coefficient_of_variation_long = 0.0;
+
+			double outlier_threshold = 0.0;
+
+			struct outlier
 			{
-				r_before.Clear();
-				reg_verify((u64*)&r_before);
-				div_uT64(quotient, &remainder, num1, num2);
-				r_after.Clear();
-				reg_verify((u64*)&r_after);
-				Assert::IsTrue(r_before.AreEqual(&r_after), L"Register validation failed");
+				int iteration;
+				double duration;
+				double variance;
+				double z_score;
 			};
+			vector<outlier> outliers;
+
+			// First batch, short run
 			{
-				string test_message = _MSGA("Divide by u64 function:  path and non-volatile reg tests. "
-					<< test_run_count << " times.\n");
-				Logger::WriteMessage(test_message.c_str());
-				Logger::WriteMessage(L"Passed. Tested expected values via assert.\n\n");
-			}
-		};
+				std::vector<double> x_i_short(timing_count_short);
+				std::vector<double> z_scores_short(timing_count_short);
+
+				//Run target function timing_count_short times, capturing each time, also getting min, max, and total time spent
+				for (int i = 0; i < timing_count_short; i++)
+				{
+					RandomFill(num1, &seed);
+					num2 = RandomU64(&seed);
+					auto countStart = std::chrono::steady_clock::now();
+					div_uT64(dividend, &remainder, num1, num2);
+					auto countEnd = std::chrono::steady_clock::now();
+					std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
+					double duration = countDur.count();
+					min_short = (duration < min_short) ? duration : min_short;
+					max_short = (duration > max_short) ? duration : max_short;
+					total_short += duration;
+					x_i_short[i] = duration;
+				};
+
+				// Calculate mean, population variance, standard deviation, coefficient of variation, and z-scores
+				{
+					mean_short = total_short / double(timing_count_short);
+					for (int i = 0; i < timing_count_short; i++)
+					{
+						double deviation = x_i_short[i] - mean_short;
+						sample_variance_short += deviation * deviation;
+					};
+
+					sample_variance_short /= (double(timing_count_short) - 1.0);
+					stddev_short = sqrt(sample_variance_short);
+					coefficient_of_variation_short = (mean_short != 0.0) ? (stddev_short / mean_short) * 100.0 : 0.0;
+					for (int i = 0; i < timing_count_short; i++)
+					{
+						z_scores_short[i] = (stddev_short != 0.0) ? (x_i_short[i] - mean_short) / stddev_short : 0.0;
+					};
+
+					string test_message = _MSGA("Divide (x64) function performance timing test.\n\nFirst batch. \nRan for "
+						<< timing_count_short << " samples.\nTotal target function (including c calling set-up) execution time: "
+						<< total_short << " microseconds. \nAverage time per call : "
+						<< mean_short << " microseconds.\nMinimum in "
+						<< min_short << "\nMaximum in "
+						<< max_short << "\n");
+
+					test_message += _MSGA("Sample Variance: "
+						<< sample_variance_short << "\nStandard Deviation: "
+						<< stddev_short << "\nCoefficient of Variation: "
+						<< coefficient_of_variation_short << "%\n\n");
+
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// Identify outliers, based on outlier_threshold
+				for (int i = 0; i < timing_count_short; i++)
+				{
+					double z_sc = z_scores_short[i];
+					double abs_z_score = (z_sc < 0.0) ? -z_sc : z_sc;
+					outlier_threshold = 3.0 * stddev_short;
+					if (abs_z_score > 3.0)
+					{
+						outlier o;
+						o.iteration = i;
+						o.duration = x_i_short[i];
+						o.z_score = z_sc;
+						outliers.push_back(o);
+					};
+				};
+
+				double outlier_percentage = (double)(outliers.size() * 100.0) / (double)timing_count_short;
+				double range_low = mean_short - (3.0 * stddev_short);
+				double range_high = mean_short + (3.0 * stddev_short);
+				range_low = (range_low < 0.0) ? 0.0 : range_low;
+				if (outliers.size() > 0)
+				{
+					string test_message = _MSGA("Identified " << outliers.size() << " outlier(s), based on a threshold of "
+						<< outlier_threshold << " which is three standard deviations from the mean of " << mean_short << " microseconds (us).\n");
+					test_message += _MSGA("Samples with execution times from " << range_low << " us to " << range_high << " us, are within that range.\n");
+					test_message += format("Samples within this range are considered normal and contain {:6.3f}% of the samples.\n", (100.0 - outlier_percentage));
+					test_message += "Samples outside this range are considered outliers. ";
+					test_message += format("This represents {:6.3f}% of the samples.", outlier_percentage);
+					test_message += "\nTested via Assert that the percentage of outliers is below 1%\n";
+					test_message += "\nUp to the first 20 are shown. z_score is the number of standards of deviation the outlier varies from the mean.\n\n";
+					test_message += " Iteration | Duration (us) | Z Score (us)  | \n";
+					test_message += "-----------|---------------|---------------|\n";
+					s32 outlier_limit = 20;
+					s32 count = 0;
+					for (auto& o : outliers) {
+						if (count++ >= outlier_limit) break;
+						test_message += format("{:10d} |", o.iteration);
+						test_message += format("{:13.2f}  |", o.duration);
+						test_message += format("{:13.4f}  |", o.z_score);
+						test_message += "\n";
+					}
+					test_message += "\n";
+					Assert::IsTrue(outlier_percentage < 1.0, L"Too many outliers, over 1% of total sample");
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// End of first batch
+				x_i_short.clear();
+				z_scores_short.clear();
+				outliers.clear();
+			};
+
+			// Second batch, medium run
+			{
+				std::vector<double> x_i_medium(timing_count_medium);
+				std::vector<double> z_scores_medium(timing_count_medium);
+				outliers.clear();
+
+				//Run target function timing_count_medium times, capturing each time, also getting min, max, and total time spent
+				for (int i = 0; i < timing_count_medium; i++)
+				{
+					RandomFill(num1, &seed);
+					num2 = RandomU64(&seed);
+					auto countStart = std::chrono::steady_clock::now();
+					div_uT64(dividend, &remainder, num1, num2);
+					auto countEnd = std::chrono::steady_clock::now();
+					std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
+					double duration = countDur.count();
+					min_medium = (duration < min_medium) ? duration : min_medium;
+					max_medium = (duration > max_medium) ? duration : max_medium;
+					total_medium += duration;
+					x_i_medium[i] = duration;
+				};
+
+				// Calculate mean, population variance, standard deviation, coefficient of variation, and z-scores
+				{
+					mean_medium = total_medium / double(timing_count_medium);
+					for (int i = 0; i < timing_count_medium; i++)
+					{
+						double deviation = x_i_medium[i] - mean_medium;
+						sample_variance_medium += deviation * deviation;
+					};
+					sample_variance_medium /= (double(timing_count_medium) - 1.0);
+					stddev_medium = sqrt(sample_variance_medium);
+					coefficient_of_variation_medium = (mean_medium != 0.0) ? (stddev_medium / mean_medium) * 100.0 : 0.0;
+					for (int i = 0; i < timing_count_medium; i++)
+					{
+						z_scores_medium[i] = (stddev_medium != 0.0) ? (x_i_medium[i] - mean_medium) / stddev_medium : 0.0;
+					};
+
+					string test_message = _MSGA("\nSecond batch. \nRan for "
+						<< timing_count_medium << " samples.\nTotal target function (including c calling set-up) execution time: "
+						<< total_medium << " microseconds. \nAverage time per call : "
+						<< mean_medium << " microseconds.\nMinimum in "
+						<< min_medium << " \nMaximum in "
+						<< max_medium << " \n");
+
+					test_message += _MSGA("Sample Variance: "
+						<< sample_variance_medium << "\nStandard Deviation: "
+						<< stddev_medium << "\nCoefficient of Variation: "
+						<< coefficient_of_variation_medium << "%\n\n");
+
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// Identify outliers, based on outlier_threshold
+				for (int i = 0; i < timing_count_medium; i++)
+				{
+					double z_sc = z_scores_medium[i];
+					double abs_z_score = (z_sc < 0.0) ? -z_sc : z_sc;
+					outlier_threshold = 3.0 * stddev_medium;
+					if (abs_z_score > 3.0)
+					{
+						outlier o;
+						o.iteration = i;
+						o.duration = x_i_medium[i];
+						o.z_score = z_sc;
+						outliers.push_back(o);
+					};
+				};
+
+				// Report on outliers, if any
+				double outlier_percentage = (double)(outliers.size() * 100.0) / (double)timing_count_medium;
+				double range_low = mean_medium - (3.0 * stddev_medium);
+				double range_high = mean_medium + (3.0 * stddev_medium);
+				range_low = (range_low < 0.0) ? 0.0 : range_low;
+
+				if (outliers.size() > 0)
+				{
+					string test_message = _MSGA("Identified " << outliers.size() << " outlier(s), based on a threshold of "
+						<< outlier_threshold << " which is three standard deviations from the mean of " << mean_medium << " microseconds (us).\n");
+					test_message += _MSGA("Samples with execution times from " << range_low << " us to " << range_high << " us, are within that range.\n");
+					test_message += format("Samples within this range are considered normal and contain {:6.3f}% of the samples.\n", (100.0 - outlier_percentage));
+					test_message += "Samples outside this range are considered outliers. ";
+					test_message += format("This represents {:6.3f}% of the samples.", outlier_percentage);
+					test_message += "\nTested via Assert that the percentage of outliers is below 1%\n";
+					test_message += "\nUp to the first 20 are shown. z_score is the number of standards of deviation the outlier varies from the mean.\n\n";
+					test_message += " Iteration | Duration (us) | Z Score (us)  | \n";
+					test_message += "-----------|---------------|---------------|\n";
+					s32 outlier_limit = 20;
+					s32 count = 0;
+					for (auto& o : outliers) {
+						if (count++ >= outlier_limit) break;
+						test_message += format("{:10d} |", o.iteration);
+						test_message += format("{:13.2f}  |", o.duration);
+						test_message += format("{:13.4f}  |", o.z_score);
+						test_message += "\n";
+					}
+					test_message += "\n";
+					Assert::IsTrue(outlier_percentage < 1.0, L"Too many outliers, over 1% of total sample");
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// End of second batch
+				x_i_medium.clear();
+				z_scores_medium.clear();
+			};
+			// Third batch, long run
+			{
+				std::vector<double> x_i_long(timing_count_long);
+				std::vector<double> z_scores_long(timing_count_long);
+				outliers.clear();
+				//Run target function timing_count_long times, capturing each time, also getting min, max, and total time spent
+				for (int i = 0; i < timing_count_long; i++)
+				{
+					RandomFill(num1, &seed);
+					num2 = RandomU64(&seed);
+					auto countStart = std::chrono::steady_clock::now();
+					div_uT64(dividend, &remainder, num1, num2);
+					auto countEnd = std::chrono::steady_clock::now();
+					std::chrono::duration<double, std::micro> countDur = countEnd - countStart;
+					double duration = countDur.count();
+					min_long = (duration < min_long) ? duration : min_long;
+					max_long = (duration > max_long) ? duration : max_long;
+					total_long += duration;
+					x_i_long[i] = duration;
+				};
+				// Calculate mean, population variance, standard deviation, coefficient of variation, and z-scores
+				{
+					mean_long = total_long / double(timing_count_long);
+					for (int i = 0; i < timing_count_long; i++)
+					{
+						double deviation = x_i_long[i] - mean_long;
+						sample_variance_long += deviation * deviation;
+					};
+					sample_variance_long /= (double(timing_count_long) - 1.0);
+					stddev_long = sqrt(sample_variance_long);
+					coefficient_of_variation_long = (mean_long != 0.0) ? (stddev_long / mean_long) * 100.0 : 0.0;
+					for (int i = 0; i < timing_count_long; i++)
+					{
+						z_scores_long[i] = (stddev_long != 0.0) ? (x_i_long[i] - mean_long) / stddev_long : 0.0;
+					};
+					string test_message = _MSGA("\nThird batch.\nRan for "
+						<< timing_count_long << " samples.\nTotal target function (including c calling set-up) execution time: "
+						<< total_long << " microseconds. \nAverage time per call : "
+						<< mean_long << " microseconds.\nMinimum in "
+						<< min_long << "\nMaximum in "
+						<< max_long << "\n");
+
+					test_message += _MSGA("Sample Variance: "
+						<< sample_variance_long << "\nStandard Deviation: "
+						<< stddev_long << "\nCoefficient of Variation: "
+						<< coefficient_of_variation_long << "%\n\n");
+
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// Identify outliers, based on outlier_threshold
+				for (int i = 0; i < timing_count_long; i++)
+				{
+					double z_sc = z_scores_long[i];
+					double abs_z_score = (z_sc < 0.0) ? -z_sc : z_sc;
+					outlier_threshold = 3.0 * stddev_long;
+					if (abs_z_score > 3.0)
+					{
+						outlier o;
+						o.iteration = i;
+						o.duration = x_i_long[i];
+						o.z_score = z_sc;
+						outliers.push_back(o);
+					};
+				};
+
+				// Report on outliers, if any
+				double outlier_percentage = (double)(outliers.size() * 100.0) / (double)timing_count_long;
+				double range_low = mean_long - (3.0 * stddev_long);
+				double range_high = mean_long + (3.0 * stddev_long);
+				range_low = (range_low < 0.0) ? 0.0 : range_low;
+				if (outliers.size() > 0)
+				{
+					string test_message = _MSGA("Identified " << outliers.size() << " outlier(s), based on a threshold of "
+						<< outlier_threshold << " which is three standard deviations from the mean of " << mean_long << " microseconds (us).\n");
+					test_message += _MSGA("Samples with execution times from " << range_low << " us to " << range_high << " us, are within that range.\n");
+					test_message += format("Samples within this range are considered normal and contain {:6.3f}% of the samples.\n", (100.0 - outlier_percentage));
+					test_message += "Samples outside this range are considered outliers. ";
+					test_message += format("This represents {:6.3f}% of the samples.", outlier_percentage);
+					test_message += "\nTested via Assert that the percentage of outliers is below 1%\n";
+					test_message += "\nUp to the first 20 are shown. z_score is the number of standards of deviation the outlier varies from the mean.\n\n";
+					test_message += " Iteration | Duration (us) | Z Score (us)  | \n";
+					test_message += "-----------|---------------|---------------|\n";
+					s32 outlier_limit = 20;
+					s32 count = 0;
+					for (auto& o : outliers) {
+						if (count++ >= outlier_limit) break;
+						test_message += format("{:10d} |", o.iteration);
+						test_message += format("{:13.2f}  |", o.duration);
+						test_message += format("{:13.4f}  |", o.z_score);
+						test_message += "\n";
+					}
+					test_message += "\n";
+					Assert::IsTrue(outlier_percentage < 1.0, L"Too many outliers, over 1% of total sample");
+					Logger::WriteMessage(test_message.c_str());
+				};
+
+				// End of third batch
+				x_i_long.clear();
+				z_scores_long.clear();
+				outliers.clear();
+			};
+		}
 	};
 };
